@@ -1,1 +1,92 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>leetcode-visualizer</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+      background: #f7f7f7;
+    }
+    h1 {
+      font-size: 32px;
+      margin-bottom: 25px;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+      max-width: 450px;
+    }
+    li {
+      background: white;
+      padding: 14px 18px;
+      margin: 10px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    a {
+      text-decoration: none;
+      font-size: 18px;
+      color: #0366d6;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    #loading {
+      font-size: 18px;
+      color: #444;
+    }
+  </style>
+</head>
+<body>
+
+<h1>leetcode-visualizer</h1>
+<div id="loading">Loading visualizations...</div>
+<ul id="list"></ul>
+
+<script>
+const username = "denis-v-s";       // <-- change this
+const repo = "leetcode-visualizer";          // <-- change this
+const branch = "main";             // or "master" depending on your repo
+
+async function loadFolders() {
+    const loading = document.getElementById("loading");
+    const list = document.getElementById("list");
+
+    const apiUrl = `https://api.github.com/repos/${username}/${repo}/contents/`;
+
+    try {
+        const response = await fetch(apiUrl);
+        const data = await response.json();
+
+        // filter directories only
+        const folders = data.filter(item => item.type === "dir");
+
+        for (const folder of folders) {
+            // Check if folder/index.html exists
+            const indexUrl = `https://raw.githubusercontent.com/${username}/${repo}/${branch}/${folder.name}/index.html`;
+            const exists = await fetch(indexUrl, { method: "HEAD" });
+
+            if (exists.ok) {
+                const li = document.createElement("li");
+                li.innerHTML = `<a href="${folder.name}/index.html">${folder.name}</a>`;
+                list.appendChild(li);
+            }
+        }
+
+        loading.textContent = "";
+    } catch (err) {
+        loading.textContent = "Failed to load folder list.";
+        console.error(err);
+    }
+}
+
+loadFolders();
+</script>
+
+</body>
+</html>
