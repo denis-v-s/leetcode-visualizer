@@ -11,7 +11,7 @@
         min-width: 32px;
     }
     .highlight {
-        background-color: #fde047; /* yellow */
+        background-color: #fde047;
     }
     .stack-item {
         @apply px-3 py-1 bg-blue-100 border rounded text-center;
@@ -22,24 +22,46 @@
 
 <h1 class="text-3xl font-bold mb-6">🌡️ LeetCode 739 — Daily Temperatures</h1>
 
+<!-- Input section -->
 <div class="mb-4">
+
     <label class="font-medium">Input temperatures (comma-separated):</label>
     <input id="inputTemps" type="text"
         class="border p-2 rounded w-full mt-1"
-        placeholder="e.g. 73, 74, 75, 71, 69, 72, 76, 73">
+        value="73, 74, 75, 71, 69, 72, 76, 73">
+
+    <div class="mt-4 flex gap-4 items-end">
+
+        <!-- Dropdown -->
+        <div class="flex-1">
+            <label class="font-medium">Choose example:</label>
+            <select id="exampleSelect" class="border p-2 rounded w-full mt-1">
+                <option value="73,74,75,71,69,72,76,73">Default example</option>
+                <option value="30,40,50,60">Example 1 — increasing</option>
+                <option value="30,60,90">Example 2 — jumps</option>
+                <option value="90,80,70,60,50">Example 3 — all decreasing</option>
+                <option value="50,50,50,50">Example 4 — all equal</option>
+                <option value="55,38,61,29,45,73,48,50">Example 5 — random mixed</option>
+            </select>
+        </div>
+
+        <button onclick="loadExample()"
+            class="px-4 py-2 bg-purple-600 text-white rounded">
+            Load Example
+        </button>
+
+    </div>
 </div>
 
 <button onclick="startVisualization()"
         class="px-4 py-2 bg-blue-600 text-white rounded mb-6">
-    Load Temperatures
+    Start Visualization
 </button>
 
 <!-- Controls -->
 <div class="flex gap-4 mb-6">
-    <button onclick="prevStep()"
-        class="px-4 py-2 bg-gray-300 rounded">⬅ Prev</button>
-    <button onclick="nextStep()"
-        class="px-4 py-2 bg-gray-300 rounded">Next ➡</button>
+    <button onclick="prevStep()" class="px-4 py-2 bg-gray-300 rounded">⬅ Prev</button>
+    <button onclick="nextStep()" class="px-4 py-2 bg-gray-300 rounded">Next ➡</button>
     <div class="text-lg font-semibold ml-4">
         Step: <span id="stepCounter">0</span>
     </div>
@@ -48,7 +70,7 @@
 <!-- Visualization Panels -->
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-    <!-- Temperatures -->
+    <!-- Temps -->
     <div class="bg-white p-4 rounded shadow">
         <h2 class="font-semibold mb-2">Temperatures (T)</h2>
         <div id="tempsRow" class="flex gap-1"></div>
@@ -56,7 +78,7 @@
         <div id="ansRow" class="flex gap-1"></div>
     </div>
 
-    <!-- Stack Panel -->
+    <!-- Stack -->
     <div class="bg-white p-4 rounded shadow">
         <h2 class="font-semibold mb-2">Monotonic Stack</h2>
         <div id="stackPanel" class="flex flex-col gap-2"></div>
@@ -75,10 +97,14 @@ let temps = [];
 let steps = [];
 let current = 0;
 
+function loadExample() {
+    const value = document.getElementById("exampleSelect").value;
+    document.getElementById("inputTemps").value = value;
+}
+
 function startVisualization() {
     const raw = document.getElementById("inputTemps").value.trim();
     if (!raw) return;
-
     temps = raw.split(",").map(x => parseInt(x.trim()));
     buildSteps();
     current = 0;
@@ -90,49 +116,44 @@ function buildSteps() {
     let ans = Array(temps.length).fill(0);
     let stack = [];
 
-    steps.push({
-        ans: [...ans],
-        stack: [...stack],
-        j: -1,
-        action: "Initialized arrays and stack."
-    });
+    steps.push({ ans:[...ans], stack:[...stack], j:-1, action:"Initialized ans[] and empty stack." });
 
     for (let j = 0; j < temps.length; j++) {
         let temp = temps[j];
 
         steps.push({
-            ans: [...ans],
-            stack: [...stack],
+            ans:[...ans],
+            stack:[...stack],
             j,
-            action: `Processing T[${j}] = ${temp}`
+            action:`Processing T[${j}] = ${temp}`
         });
 
         while (stack.length && temp > temps[stack[stack.length - 1]]) {
-            const i = stack.pop();
+            let i = stack.pop();
             ans[i] = j - i;
 
             steps.push({
-                ans: [...ans],
-                stack: [...stack],
+                ans:[...ans],
+                stack:[...stack],
                 j,
-                action: `temp ${temp} > T[${i}] = ${temps[i]} → ans[${i}] = ${j - i}`
+                action:`temp ${temp} > T[${i}] = ${temps[i]} → ans[${i}] = ${j - i}`
             });
         }
 
         stack.push(j);
         steps.push({
-            ans: [...ans],
-            stack: [...stack],
+            ans:[...ans],
+            stack:[...stack],
             j,
-            action: `Push index ${j} onto stack`
+            action:`Push index ${j} onto stack`
         });
     }
 
     steps.push({
-        ans: [...ans],
-        stack: [...stack],
-        j: temps.length,
-        action: `Done. All remaining stack entries get 0.`
+        ans:[...ans],
+        stack:[...stack],
+        j:temps.length,
+        action:`Done. Remaining indices in stack have no warmer future day.`
     });
 }
 
@@ -140,25 +161,21 @@ function renderStep() {
     const s = steps[current];
     document.getElementById("stepCounter").innerText = current;
 
-    // Temps Row
-    const tr = temps
-        .map((t, idx) =>
+    // Temperatures
+    document.getElementById("tempsRow").innerHTML =
+        temps.map((t, idx) =>
             `<div class="cell ${idx === s.j ? 'highlight' : ''}">${t}</div>`
-        )
-        .join("");
-    document.getElementById("tempsRow").innerHTML = tr;
+        ).join("");
 
-    // Ans Row
-    const ar = s.ans
-        .map(v => `<div class="cell">${v}</div>`)
-        .join("");
-    document.getElementById("ansRow").innerHTML = ar;
+    // Answer
+    document.getElementById("ansRow").innerHTML =
+        s.ans.map(v => `<div class="cell">${v}</div>`).join("");
 
-    // Stack Panel
-    const sp = s.stack
-        .map(i => `<div class="stack-item">index ${i} → T[${i}] = ${temps[i]}</div>`)
-        .join("");
-    document.getElementById("stackPanel").innerHTML = sp;
+    // Stack
+    document.getElementById("stackPanel").innerHTML =
+        s.stack.map(i =>
+            `<div class="stack-item">index ${i} → T[${i}] = ${temps[i]}</div>`
+        ).join("");
 
     // Explanation
     document.getElementById("explanation").innerText = s.action;
