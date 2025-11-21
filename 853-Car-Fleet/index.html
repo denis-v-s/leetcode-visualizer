@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Car Fleet Visualization</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f7f7f7; }
+    h1 { margin-bottom: 20px; }
+    .controls button { padding: 10px 16px; margin-right: 10px; border-radius: 6px; border: none; background: #0366d6; color: white; cursor: pointer; }
+    .controls button:disabled { background: gray; cursor: default; }
+
+    #carsContainer {
+      margin-top: 25px;
+      display: flex;
+      flex-direction: row; flex-wrap: wrap;
+      gap: 10px;
+    }
+    .carRow {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px;
+      border-radius: 6px;
+      background: #fff;
+      border: 2px solid transparent;
+      transition: 0.3s;
+    }
+    .carRow.highlight {
+      border-color: #4caf50;
+      background: #e8ffe8;
+    }
+    .carBox {
+      background: #4a90e2;
+      color: white;
+      padding: 6px 10px;
+      border-radius: 6px;
+      min-width: 60px;
+      text-align: center;
+    }
+    .fleetBox {
+      background: #e24a4a;
+    }
+
+    #explanation {
+      margin-top: 25px;
+      padding: 15px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      white-space: pre-wrap;
+      font-family: monospace;
+      min-height: 80px;
+    }
+
+    .top-row { display:flex; gap:12px; align-items:center; flex-wrap:wrap }
+    label { font-weight:600; }
+    input[type="text"], input[type="number"] { padding:6px 8px; border-radius:6px; border:1px solid #ccc; }
+    select { padding:6px 8px; border-radius:6px; border:1px solid #ccc; }
+    button.small { padding:6px 8px; }
+  </style>
+</head>
+<body>
+  <h1>Car Fleet – Step-by-Step Visualization (with Array Highlighting)</h1>
+
+  <div class="top-row">
+    <div>
+      <label>Target:</label>
+      <input id="targetInput" type="number" value="12" />
+    </div>
+
+    <div>
+      <label>Positions:</label>
+      <input id="posInput" type="text" value="10,8,0,5,3" size="24" />
+    </div>
+
+    <div>
+      <label>Speeds:</label>
+      <input id="spdInput" type="text" value="2,4,1,1,3" size="24" />
+    </div>
+
+    <div>
+      <label>Examples:</label>
+      <select id="exampleSelect" onchange="loadExample()">
+        <option value="10,8,0,5,3|2,4,1,1,3">Default (10,8,0,5,3)</option>
+        <option value="3,5,7|3,2,1">Simple 3 cars</option>
+        <option value="0,2,4,6|1,1,1,1">All same speed</option>
+        <option value="6,5,4|3,3,3">Decreasing positions</option>
+        <option value="16,8,0,5,3|4,4,2,1,3">Mixed</option>
+        <option value="73,74,75,71,69|1,1,1,1,1">Extra example (higher values)</option>
+      </select>
+    </div>
+
+    
+  </div>
+
+  <br />
+  <!-- Build Steps button removed because steps are built automatically now -->
+
+  <div class="controls" style="margin-top:12px;">
+    <button id="prevBtn" onclick="prevStep()" disabled>Prev</button>
+    <button id="nextBtn" onclick="nextStep()" disabled>Next</button>
+  </div>
+
+  <div id="carsContainer"></div>
+
+  <div id="fleetCount" style="margin-top:15px;font-weight:600;font-size:18px;"></div>
+
+  <div id="explanation"></div>
+
+  <script>
+    // Steps structure: { index: number, explanation: string, fleet: number | null }
+    let steps = [];
+    let stepIndex = 0;
+    let cars = [];
+
+    function loadExample() {
+      const v = document.getElementById('exampleSelect').value;
+      const [posStr, spdStr] = v.split('|');
+      document.getElementById('posInput').value = posStr;
+      document.getElementById('spdInput').value = spdStr;
+      generate();
+    }
+
+    function parseNumberList(str) {
+      return str.split(',').map(s => Number(s.trim())).filter(n => !Number.isNaN(n));
+    }
+
+    function generate() {
+      const target = parseFloat(document.getElementById('targetInput').value);
+      const positions = parseNumberList(document.getElementById('posInput').value);
+      const speeds = parseNumberList(document.getElementById('spdInput').value);
+
+      if (positions.length === 0 || speeds.length === 0) {
+        alert('Please provide positions and speeds.');
+        return;
+      }
+      if (positions.length !== speeds.length) {
+        alert('Positions and speeds must have the same length.');
+        return;
+      }
+
+      cars = positions.map((p, i) => ({ pos: p, spd: speeds[i], originalIndex: i }));
+      // sort by position descending (rightmost first)
+      cars.sort((a, b) => b.pos - a.pos);
+
+      steps = [];
+      stepIndex = 0;
+
+      let prev = -Infinity;
+      let fleets = 0;
+
+      // initial step: show sorted cars
+      steps.push({
+        index: -1,
+        explanation: `Cars sorted from right to left:\n${JSON.stringify(cars, null, 2)}`,
+        fleet: null
+      });
+
+      // iterate through sorted cars and record each decision
+      for (let i = 0; i < cars.length; i++) {
+        const pos = cars[i].pos;
+        const spd = cars[i].spd;
+        const time = (target - pos) / spd;
+
+        let explanation = `Car ${i}: pos=${pos}, speed=${spd}, time=${time.toFixed(2)}\nprev=${prev}`;
+        let forms = null;
+
+        if (time > prev) {
+          fleets++;
+          prev = time;
+          forms = fleets; // new fleet number
+          explanation += `\n→ Forms NEW fleet (#${fleets})`;
+        } else {
+          explanation += `\n→ Joins previous fleet`;
+        }
+
+        steps.push({ index: i, explanation, fleet: forms });
+      }
+
+      // final summary step
+      steps.push({ index: -1, explanation: `Final Fleets = ${fleets}`, fleet: null });
+
+      // render initial
+      stepIndex = 0;
+      render();
+      updateButtons();
+
+      // enable navigation
+      document.getElementById('nextBtn').disabled = false;
+      document.getElementById('prevBtn').disabled = true;
+    }
+
+    function render() {
+      const container = document.getElementById('carsContainer');
+      container.innerHTML = '';
+
+      const current = steps[stepIndex] || { index: -1, explanation: '(no steps)', fleet: null };
+
+      cars.forEach((car, i) => {
+        const row = document.createElement('div');
+        row.className = 'carRow' + (current.index === i ? ' highlight' : '');
+
+        const label = document.createElement('div');
+        label.textContent = `Car ${i}`;
+
+        const box = document.createElement('div');
+        box.className = 'carBox';
+        box.textContent = `pos ${car.pos}`;
+
+        if (current.fleet && current.index === i) box.classList.add('fleetBox');
+
+        row.appendChild(label);
+        row.appendChild(box);
+        container.appendChild(row);
+      });
+
+      document.getElementById('explanation').textContent = current.explanation;
+
+      // Update fleet counter
+      let counted = 0;
+      for (let k = 0; k <= stepIndex; k++) {
+        if (steps[k].fleet) counted = steps[k].fleet;
+      }
+      document.getElementById('fleetCount').textContent = `Fleets so far: ${counted}`;
+      updateButtons();
+    }
+
+    function nextStep() {
+      if (stepIndex < steps.length - 1) stepIndex++;
+      render();
+    }
+
+    function prevStep() {
+      if (stepIndex > 0) stepIndex--;
+      render();
+    }
+
+    function updateButtons() {
+      document.getElementById('prevBtn').disabled = stepIndex === 0;
+      document.getElementById('nextBtn').disabled = stepIndex === steps.length - 1;
+    }
+
+    // Add initial example so user can press Build Steps immediately
+    (function init() {
+      // Preload default example on first load
+      const v = document.getElementById('exampleSelect').value;
+      const [posStr, spdStr] = v.split('|');
+      document.getElementById('posInput').value = posStr;
+      document.getElementById('spdInput').value = spdStr;
+      generate();
+    })();
+  </script>
+</body>
+</html>
