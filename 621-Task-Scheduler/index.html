@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Task Scheduler (LC 621) Visualization</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+    h1 { margin-bottom: 15px; }
+
+    .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    input, select { padding: 6px 8px; border-radius: 6px; border: 1px solid #ccc; }
+
+    button { padding: 10px 16px; border-radius: 6px; border: none; background: #0366d6; color: white; cursor: pointer; }
+    button:disabled { background: gray; cursor: default; }
+
+    #timeline {
+      margin-top: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .slot {
+      min-width: 55px;
+      padding: 8px;
+      border-radius: 6px;
+      background: #fff;
+      border: 2px solid transparent;
+      text-align: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      font-weight: 600;
+      transition: background 0.3s;
+    }
+
+    .active { background: #e8ffe8; border-color: #4caf50; }
+    .idle { background: #ffeaea; border-color: #ff6b6b; }
+
+    #explanation {
+      margin-top: 20px;
+      padding: 15px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      white-space: pre-wrap;
+      font-family: monospace;
+      min-height: 80px;
+    }
+
+    #pqContainer, #backlogContainer {
+      background: #fff;
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 20px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      min-height: 40px;
+      transition: all 0.3s;
+    }
+
+    .taskBox {
+      display: inline-block;
+      padding: 6px 10px;
+      background: #4a90e2;
+      color: white;
+      border-radius: 6px;
+      margin-right: 6px;
+      transition: all 0.3s;
+    }
+  </style>
+</head>
+<body>
+  <h1>LC 621 – Task Scheduler Visualization</h1>
+
+  <div class="row">
+    <label>Tasks:</label>
+    <input id="tasksInput" type="text" value="A,A,A,B,B,B" size="20" />
+
+    <label>Cooldown n:</label>
+    <input id="cooldownInput" type="number" value="2" />
+
+    <select id="exampleSelect">
+      <option value="A,A,A,B,B,B|2">Default AABBBB n=2</option>
+      <option value="A,A,A,A,B,C|2">Heavy A load</option>
+      <option value="A,B,C,D,E,F|3">All different</option>
+      <option value="A,A,A,B,C,C,D,D|2">Mixed counts</option>
+    </select>
+  </div>
+
+  <br>
+
+  <div class="controls">
+    <button id="prevBtn" onclick="prevStep()" disabled>Prev</button>
+    <button id="nextBtn" onclick="nextStep()" disabled>Next</button>
+  </div>
+
+  <div id="pqContainer"></div>
+  <div id="backlogContainer"></div>
+  <div id="timeline"></div>
+  <div id="explanation"></div>
+
+  <script>
+    let steps = [];
+    let stepIndex = 0;
+
+    function parseTasks(str) {
+      return str.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    }
+
+    function build() {
+      const tasks = parseTasks(document.getElementById('tasksInput').value);
+      const n = parseInt(document.getElementById('cooldownInput').value);
+      if (tasks.length === 0) return;
+
+      const freq = {};
+      for (const t of tasks) freq[t] = (freq[t] || 0) + 1;
+
+      let pq = Object.entries(freq).map(([task, f]) => [-f, task]);
+      pq.sort((a, b) => a[0] - b[0]);
+      const backlog = [];
+      let time = 0;
+      steps = [];
+
+      steps.push({ timeline: [], pq: JSON.parse(JSON.stringify(pq)), backlog: [], explanation: `Initial PQ: ${JSON.stringify(pq)}` });
+
+      while (pq.length > 0 || backlog.length > 0) {
+        time++;
+        let explanation = `Time = ${time}`;
+        let executed = null;
+
+        if (pq.length > 0) {
+          const [freqNeg, task] = pq.shift();
+          executed = task;
+          explanation += `\nExecuting task ${task}`;
+          if (freqNeg + 1 < 0) backlog.push([time + n, freqNeg + 1, task]);
+        } else {
+          explanation += `\nCPU idle`;
+        }
+
+        backlog.sort((a,b)=>a[0]-b[0]);
+        if (backlog.length>0 && backlog[0][0]===time){
+          const returned = backlog.shift();
+          pq.push([returned[1], returned[2]]);
+          pq.sort((a,b)=>a[0]-b[0]);
+          explanation += `\nTask returned from backlog: (scheduled_time: ${returned[0]}, freq: ${-returned[1]}, task: '${returned[2]}')`;
+        }
+
+        const prevTimeline = steps.length>0?steps[steps.length-1].timeline:[];
+        steps.push({ timeline:[...prevTimeline, executed], pq:JSON.parse(JSON.stringify(pq)), backlog:JSON.parse(JSON.stringify(backlog)), explanation });
+      }
+
+      stepIndex = 0;
+      update();
+      document.getElementById('nextBtn').disabled = steps.length <= 1;
+      document.getElementById('prevBtn').disabled = true;
+    }
+
+    function update() {
+      const s = steps[stepIndex];
+      document.getElementById('pqContainer').innerHTML = `<b>PQ:</b> ` + s.pq.map(x => `<span class='taskBox'>(freq: ${-x[0]}, task: '${x[1]}')</span>`).join(' ');
+      document.getElementById('backlogContainer').innerHTML = `<b>Backlog:</b> ` + s.backlog.map(x => `<span class='taskBox'>(scheduled_time: ${x[0]}, freq: ${-x[1]}, task: '${x[2]}')</span>`).join(' ');
+
+      const tl = document.getElementById('timeline');
+      tl.innerHTML = '';
+      s.timeline.forEach((t) => {
+        const div = document.createElement('div');
+        div.className = 'slot ' + (t ? 'active' : 'idle');
+        div.textContent = t ? t : 'idle';
+        tl.appendChild(div);
+      });
+
+      document.getElementById('explanation').textContent = s.explanation;
+      document.getElementById('prevBtn').disabled = stepIndex === 0;
+      document.getElementById('nextBtn').disabled = stepIndex === steps.length - 1;
+    }
+
+    function nextStep(){
+      if(stepIndex < steps.length - 1){
+        stepIndex++;
+        update();
+      }
+    }
+
+    function prevStep(){
+      if(stepIndex > 0){
+        stepIndex--;
+        update();
+      }
+    }
+
+    function loadExample(value) {
+      const [tasks, n] = value.split('|');
+      document.getElementById('tasksInput').value = tasks;
+      document.getElementById('cooldownInput').value = n;
+      build();
+    }
+
+    // preload default example on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      loadExample(document.getElementById('exampleSelect').value);
+    });
+
+    document.getElementById('exampleSelect').onchange = function(){
+      loadExample(this.value);
+    };
+  </script>
+</body>
+</html>
