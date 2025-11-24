@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Sudoku Validator Visualization</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 20px; background:#f7fafc }
+  h2 { margin: 0 0 12px 0 }
+  .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(9, 40px);
+    grid-template-rows: repeat(9, 40px);
+    gap: 0;
+  }
+  .cell {
+    width: 40px; height: 40px;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:600; background:#fff; border:1px solid #d1d5db; box-sizing:border-box;
+  }
+  .cell.tile-right { border-right:3px solid #000 !important; }
+  .cell.tile-bottom { border-bottom:3px solid #000 !important; }
+  .cell.tile-left { border-left:3px solid #000 !important; }
+  .cell.tile-top { border-top:3px solid #000 !important; }
+  .cell.empty { color:#9ca3af; font-weight:400 }
+  .cell.current { outline:3px solid #f59e0b; transform:scale(1.03); }
+  .cell.conflict { background:#fee2e2; border-color:#fca5a5 }
+  .sets { display:flex; gap:12px; margin-top:12px; flex-wrap:wrap }
+  .setBox { background:#fff; padding:8px; border-radius:8px; border:1px solid #e6e6e6; min-width:220px }
+  .setTitle { font-weight:700; margin-bottom:6px }
+  .small { font-size:13px; color:#374151; white-space:pre-wrap }
+  .status { margin-top:12px; font-weight:700 }
+  .ok { color:#16a34a }
+  .bad { color:#dc2626 }
+  select, button { padding:8px; border-radius:6px; border:1px solid #cbd5e1; background:#fff }
+  #info { white-space:pre-wrap; background:#fff; padding:10px; border-radius:8px; border:1px solid #e6e6e6; min-height:120px; margin-bottom:12px; }
+</style>
+</head>
+<body>
+<h2>LeetCode 36: Valid Sudoku — Step Visualization</h2>
+
+<div class="controls">
+  <select id="exampleSelect">
+    <option value="default">Default valid board</option>
+    <option value="invalidRow">Invalid — duplicate in row</option>
+    <option value="invalidCol">Invalid — duplicate in column</option>
+    <option value="invalidTile">Invalid — duplicate in 3x3 tile</option>
+  </select>
+  <button id="prevBtn">Prev</button>
+  <button id="nextBtn">Next</button>
+  <button id="runBtn">Run to End</button>
+  <button id="resetBtn">Reset</button>
+</div>
+
+<div id="info">Step info will appear here</div>
+
+<div style="display:flex; gap:20px; align-items:flex-start;">
+  <div>
+    <div class="grid" id="grid" aria-label="sudoku grid"></div>
+    <div style="display:flex; gap:20px; margin-top:20px;">
+      <div class="setBox"><div class="setTitle">Row Sets</div><pre id="rowSets" class="small"></pre></div>
+      <div class="setBox"><div class="setTitle">Column Sets</div><pre id="colSets" class="small"></pre></div>
+      <div class="setBox"><div class="setTitle">Tile Sets</div><pre id="tileSets" class="small"></pre></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const EXAMPLES = {
+    default: [
+      ["5","3",".",".","7",".",".",".","."],
+      ["6",".",".","1","9","5",".",".","."],
+      [".","9","8",".",".",".",".","6","."],
+      ["8",".",".",".","6",".",".",".","3"],
+      ["4",".",".","8",".","3",".",".","1"],
+      ["7",".",".",".","2",".",".",".","6"],
+      [".","6",".",".",".",".","2","8","."],
+      [".",".",".","4","1","9",".",".","5"],
+      [".",".",".",".","8",".",".","7","9"]
+    ]
+  };
+
+  const N = 9;
+  let board = [];
+  let steps = [];
+  let stepIndex = 0;
+
+  const grid = document.getElementById('grid');
+  const rowSetsEl = document.getElementById('rowSets');
+  const colSetsEl = document.getElementById('colSets');
+  const tileSetsEl = document.getElementById('tileSets');
+  const infoEl = document.getElementById('info');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const runBtn = document.getElementById('runBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const exampleSelect = document.getElementById('exampleSelect');
+
+  function tileClasses(i,j){
+    const classes = ['cell'];
+    if (j===2||j===5) classes.push('tile-right');
+    if (i===2||i===5) classes.push('tile-bottom');
+    if (j===0) classes.push('tile-left');
+    if (i===0) classes.push('tile-top');
+    return classes.join(' ');
+  }
+
+  function drawGrid(){
+    grid.innerHTML = '';
+    for(let i=0;i<9;i++){
+      for(let j=0;j<9;j++){
+        const div = document.createElement('div');
+        div.className = tileClasses(i,j);
+        div.id = `cell-${i}-${j}`;
+        grid.appendChild(div);
+      }
+    }
+  }
+
+  function buildStepsFromBoard(bd){
+    const n = 3;
+    const row_set = Array.from({length:N},()=>new Set());
+    const col_set = Array.from({length:N},()=>new Set());
+    const tile_set = Array.from({length:N},()=>new Set());
+    steps = [];
+    stepIndex = 0;
+
+    for(let i=0;i<N;i++){
+      for(let j=0;j<N;j++){
+        const val = bd[i][j];
+        const tile_index = Math.floor(i/n)*n + Math.floor(j/n);
+
+        const baseExplain =
+          'i = ' + i + ', j = ' + j + '\n' +
+          'row = i = ' + i + ', col = j = ' + j + '\n' +
+          'tile_index = (i // 3)*3 + (j // 3) = (' + Math.floor(i/n) + '*3)+' + Math.floor(j/n) + ' = ' + tile_index + '\n';
+
+        if(val === '.'){
+          steps.push({i,j,val, row:copySets(row_set), col:copySets(col_set), tile:copySets(tile_set), ok:true, explain: baseExplain + 'cell ('+i+','+j+') empty — skip'} );
+          continue;
+        }
+
+        const conflict = row_set[i].has(val) || col_set[j].has(val) || tile_set[tile_index].has(val);
+        if(conflict){
+          steps.push({i,j,val, row:copySets(row_set), col:copySets(col_set), tile:copySets(tile_set), ok:false, explain: baseExplain + "Conflict at cell ("+i+","+j+") with '"+val+"'} );
+          return steps;
+        }
+
+        row_set[i].add(val);
+        col_set[j].add(val);
+        tile_set[tile_index].add(val);
+
+        steps.push({i,j,val, row:copySets(row_set), col:copySets(col_set), tile:copySets(tile_set), ok:true, explain: baseExplain + "Placed '"+val+"' at ("+i+","+j+")"} );
+      }
+    }
+    return steps;
+  }
+
+  function copySets(arr){ return arr.map(s=>Array.from(s)); }
+  function formatSets(arr){ return arr.map((a,i)=>'r'+i+':['+a.join(',')+']').join('\n'); }
+  function formatTileSets(arr){ return arr.map((a,i)=>'t'+i+':['+a.join(',')+']').join('\n'); }
+
+  function render(){
+    const s = steps[stepIndex];
+    const bd = Array.from({length:9},()=>Array(9).fill('.'));
+    for(let k=0;k<=stepIndex;k++){
+      const st = steps[k];
+      if(st.val!=='.') bd[st.i][st.j]=st.val;
+    }
+    for(let i=0;i<9;i++){
+      for(let j=0;j<9;j++){
+        const div = document.getElementById('cell-'+i+'-'+j);
+        const cur = (s && s.i===i && s.j===j);
+        div.className = tileClasses(i,j);
+        if(cur) div.classList.add('current'); else div.classList.remove('current');
+        const v=bd[i][j];
+        div.textContent = v==='.'?'.':v;
+        div.classList.toggle('empty', v==='.');
+        if(s && !s.ok && s.i===i && s.j===j) div.classList.add('conflict'); else div.classList.remove('conflict');
+      }
+    }
+    rowSetsEl.textContent = formatSets(s.row);
+    colSetsEl.textContent = formatSets(s.col);
+    tileSetsEl.textContent = formatTileSets(s.tile);
+    infoEl.textContent = s.explain + '\n' + (s.ok?'So far valid':'Invalid — stopped early');
+    prevBtn.disabled = stepIndex===0;
+    nextBtn.disabled = stepIndex>=steps.length-1;
+  }
+
+  function next(){ if(stepIndex<steps.length-1){ stepIndex++; render(); } }
+  function prev(){ if(stepIndex>0){ stepIndex--; render(); } }
+
+  drawGrid();
+  board = EXAMPLES.default;
+  steps = buildStepsFromBoard(board);
+  stepIndex = 0;
+  render();
+
+  prevBtn.addEventListener('click', prev);
+  nextBtn.addEventListener('click', next);
+  runBtn.addEventListener('click', ()=>{ while(stepIndex<steps.length-1) stepIndex++; render(); });
+  resetBtn.addEventListener('click', ()=>{ stepIndex=0; render(); });
+  exampleSelect.addEventListener('change', ()=>{
+    board = EXAMPLES[exampleSelect.value];
+    steps = buildStepsFromBoard(board);
+    stepIndex=0; render();
+  });
+})();
+</script>
+</body>
+</html>
