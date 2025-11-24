@@ -43,7 +43,7 @@ let steps=[], stepIndex=0;
 
 function cloneTree(node){
   if(!node) return null;
-  return { val:node.val, left:cloneTree(node.left), right:cloneTree(node.right} };
+  return { val:node.val, left:cloneTree(node.left), right:cloneTree(node.right) };
 }
 
 function invertTreeSteps(node){
