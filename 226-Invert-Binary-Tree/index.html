@@ -10,7 +10,8 @@
   button { padding:8px; border-radius:6px; border:1px solid #cbd5e1; background:#fff; cursor:pointer; }
   button:disabled { opacity:0.5; cursor:not-allowed; }
 
-  .tree { display:flex; justify-content:center; margin-top:20px; flex-direction:column; align-items:center; position:relative; }
+  .tree-container { position:relative; display:flex; justify-content:center; margin-top:20px; }
+  .tree { display:flex; flex-direction:column; align-items:center; position:relative; }
   .node { display:flex; flex-direction:column; align-items:center; margin:20px; position:relative; transition: all 0.5s ease; }
   .value { width:30px; height:30px; border-radius:50%; background:#3b82f6; color:white; display:flex; justify-content:center; align-items:center; font-weight:bold; transition: transform 0.3s; z-index:1; position:relative; }
   .current { outline:3px solid #f59e0b; transform:scale(1.2); }
@@ -30,25 +31,23 @@
 </div>
 
 <pre id="info"></pre>
-<div id="treeContainer" class="tree"></div>
+<div class="tree-container">
+  <div id="treeContainer" class="tree"></div>
+</div>
 
 <script>
 (function(){
   const container = document.getElementById('treeContainer');
   const infoEl = document.getElementById('info');
 
-  // Example tree
   const treeExample = { val:4, left:{val:2,left:{val:1},right:{val:3}}, right:{val:7,left:{val:6},right:{val:9}} };
-
   let steps = [], stepIndex = 0;
 
-  // Clone tree
   function cloneTree(node){
     if(!node) return null;
     return { val: node.val, left: cloneTree(node.left), right: cloneTree(node.right) };
   }
 
-  // Build steps: visit + swap
   function invertTreeSteps(node){
     if(!node) return null;
     steps.push({action:'visit', node});
@@ -63,7 +62,6 @@
   const root = cloneTree(treeExample);
   invertTreeSteps(cloneTree(root));
 
-  // Render tree recursively
   function renderTree(node, highlightNode){
     if(!node) return document.createElement('div');
     const nodeEl = document.createElement('div');
@@ -77,33 +75,78 @@
     if(node.left || node.right){
       const childrenEl = document.createElement('div');
       childrenEl.className = 'children';
-      childrenEl.appendChild(renderTree(node.left, highlightNode));
-      childrenEl.appendChild(renderTree(node.right, highlightNode));
+      const leftEl = renderTree(node.left, highlightNode);
+      const rightEl = renderTree(node.right, highlightNode);
+      childrenEl.appendChild(leftEl);
+      childrenEl.appendChild(rightEl);
       nodeEl.appendChild(childrenEl);
     }
-
     return nodeEl;
   }
 
-  // Find node by value
   function findNode(node, val){
     if(!node) return null;
     if(node.val === val) return node;
     return findNode(node.left,val) || findNode(node.right,val);
   }
 
-  // Animate swap between left and right
+  function drawLines(){
+    const lines = container.querySelectorAll('.line');
+    lines.forEach(l=>l.remove());
+    const nodeEls = container.querySelectorAll('.node');
+    nodeEls.forEach(parentEl=>{
+      const childrenEl = parentEl.querySelector('.children');
+      if(!childrenEl) return;
+      const [leftEl, rightEl] = Array.from(childrenEl.children);
+      if(leftEl){
+        addLine(parentEl, leftEl);
+      }
+      if(rightEl){
+        addLine(parentEl, rightEl);
+      }
+    });
+  }
+
+  function addLine(parentEl, childEl){
+    const p = parentEl.querySelector('.value');
+    const c = childEl.querySelector('.value');
+    const line = document.createElement('div');
+    line.className = 'line';
+    const rectP = p.getBoundingClientRect();
+    const rectC = c.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const x1 = rectP.left + rectP.width/2 - containerRect.left;
+    const y1 = rectP.top + rectP.height/2 - containerRect.top;
+    const x2 = rectC.left + rectC.width/2 - containerRect.left;
+    const y2 = rectC.top + rectC.height/2 - containerRect.top;
+    const length = Math.hypot(x2-x1, y2-y1);
+    const angle = Math.atan2(y2-y1, x2-x1) * 180/Math.PI;
+    line.style.width = length + 'px';
+    line.style.height = '2px';
+    line.style.transformOrigin = '0 0';
+    line.style.transform = `translate(${x1}px, ${y1}px) rotate(${angle}deg)`;
+    container.appendChild(line);
+  }
+
   function animateSwap(node){
-    if(!node || (!node.left && !node.right)) return;
-    const childrenEl = container.querySelector(`.node[data-val='${node.val}'] > .children`);
-    if(childrenEl && childrenEl.children.length === 2){
-      childrenEl.style.transition = 'all 0.5s ease';
-      childrenEl.style.flexDirection = 'row-reverse';
-      setTimeout(()=>{ childrenEl.style.flexDirection = 'row'; },500); // reset for next step
+    const nodeEl = container.querySelector(`.node[data-val='${node.val}'] > .children`);
+    if(!nodeEl || nodeEl.children.length<2) return;
+    nodeEl.style.transition = 'all 0.5s ease';
+    nodeEl.style.flexDirection = 'row-reverse';
+    setTimeout(()=>{ nodeEl.style.flexDirection='row'; drawLines(); },500);
+  }
+
+  function addDataAttr(nodeEl, node){
+    nodeEl.setAttribute('data-val', node.val);
+    if(node.left || node.right){
+      const childrenEl = nodeEl.querySelector('.children');
+      if(childrenEl){
+        const childrenNodes = [node.left, node.right];
+        Array.from(childrenEl.children).forEach((cEl,i)=>addDataAttr(cEl, childrenNodes[i]));
+      }
     }
   }
 
-  // Render step
   function render(){
     const treeClone = cloneTree(root);
     for(let i=0;i<=stepIndex;i++){
@@ -115,30 +158,16 @@
         }
       }
     }
-    container.innerHTML = '';
+    container.innerHTML='';
     const highlight = steps[stepIndex] ? steps[stepIndex].node : null;
-
-    function addDataAttr(nodeEl, node){
-      nodeEl.setAttribute('data-val', node.val);
-      if(node.left || node.right){
-        const childrenEl = nodeEl.querySelector('.children');
-        if(childrenEl){
-          const childrenNodes = [node.left, node.right];
-          Array.from(childrenEl.children).forEach((cEl,i)=>addDataAttr(cEl, childrenNodes[i]));
-        }
-      }
-    }
-
     const treeEl = renderTree(treeClone, highlight);
     addDataAttr(treeEl, treeClone);
     container.appendChild(treeEl);
+    drawLines();
 
     const s = steps[stepIndex];
     if(s.action==='visit') infoEl.textContent = `Visiting node ${s.node.val}`;
-    else if(s.action==='swap') {
-      infoEl.textContent = `Swapped children of node ${s.node.val}`;
-      animateSwap(s.node);
-    }
+    else if(s.action==='swap'){ infoEl.textContent = `Swapped children of node ${s.node.val}`; animateSwap(s.node); }
 
     document.getElementById('prevBtn').disabled = stepIndex===0;
     document.getElementById('nextBtn').disabled = stepIndex>=steps.length-1;
