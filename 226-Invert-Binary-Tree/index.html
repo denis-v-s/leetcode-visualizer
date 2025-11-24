@@ -1,220 +1,456 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>Invert Binary Tree Visualization</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Invert Binary Tree — Visualization (LC 226)</title>
 <style>
-body { font-family: Arial; padding:20px; background:#f7fafc; }
-.controls { display:flex; gap:8px; margin-bottom:12px; }
-button { padding:8px 12px; border-radius:6px; background:white; border:1px solid #ccc; cursor:pointer; }
-button:disabled { opacity:0.5; cursor:not-allowed; }
+  :root{
+    --bg:#f7fafc;
+    --node-bg:#2563eb;
+    --node-size:44px;
+    --highlight:#f59e0b;
+    --text:#111827;
+  }
+  body{font-family:Inter,Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text);padding:18px;}
+  h1{margin:0 0 12px 0;font-size:20px}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  button{padding:8px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;cursor:pointer}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  pre#info{background:#fff;padding:10px;border:1px solid #e6e6e6;border-radius:8px;min-height:46px;white-space:pre-wrap;margin-bottom:12px}
 
-.tree-wrapper {
-    position:relative;
-    display:flex;
-    justify-content:center;
-    margin-top:20px;
-}
+  /* tree area */
+  .tree-wrap{position:relative;border-radius:10px;padding:12px;background:linear-gradient(180deg,#ffffff,#fbfdff);box-shadow:0 4px 12px rgba(2,6,23,0.06);min-height:360px}
+  svg#lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+  .tree-canvas{position:relative;width:100%;height:100%}
 
-.tree {
-    position:relative;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-}
+  /* node visuals (absolute positioned according to computed x,y) */
+  .node-item{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;pointer-events:auto}
+  .node-bubble{width:var(--node-size);height:var(--node-size);border-radius:50%;background:var(--node-bg);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 6px 18px rgba(37,99,235,0.12);transition:box-shadow .18s ease, transform .2s ease, opacity .25s ease;}
+  .node-bubble.current{outline:4px solid var(--highlight);transform:scale(1.08)}
+  .node-label{margin-top:6px;font-size:12px;color:#374151}
+  .node-bubble.fading{opacity:0;transition:opacity .28s ease}
 
-.node {
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    margin:20px;
-    position:relative;
-}
-
-.value {
-    width:40px;
-    height:40px;
-    border-radius:50%;
-    background:#3b82f6;
-    color:white;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-weight:bold;
-    transition:0.3s;
-}
-
-.current {
-    outline:4px solid #f59e0b;
-    transform:scale(1.2);
-}
-
-.children {
-    display:flex;
-    gap:60px;
-    margin-top:40px;
-}
-line {
-    stroke:#6b7280;
-    stroke-width:2;
-}
+  /* responsive */
+  @media (max-width:700px){
+    :root{--node-size:36px}
+  }
 </style>
 </head>
-
 <body>
-<h2>LeetCode 226 – Invert Binary Tree (Visualization)</h2>
+  <h1>LeetCode 226 — Invert Binary Tree (smooth cross-fade swaps)</h1>
 
-<div class="controls">
-  <button id="prevBtn">Prev</button>
-  <button id="nextBtn">Next</button>
-  <button id="runBtn">Run to End</button>
-  <button id="resetBtn">Reset</button>
-</div>
+  <div class="controls">
+    <button id="prevBtn">Prev</button>
+    <button id="nextBtn">Next</button>
+    <button id="runBtn">Run to End</button>
+    <button id="resetBtn">Reset</button>
+  </div>
 
-<pre id="info"></pre>
+  <pre id="info">Step info will appear here</pre>
 
-<div class="tree-wrapper">
-    <!-- SVG will be dynamically resized to match the tree -->
-    <svg id="svgLines" style="position:absolute; top:0; left:0; pointer-events:none;"></svg>
-    <div id="treeContainer" class="tree"></div>
-</div>
+  <div class="tree-wrap" id="treeWrap">
+    <svg id="lines" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="canvas" class="tree-canvas"></div>
+  </div>
 
 <script>
-(function(){
-const container = document.getElementById("treeContainer");
-const svgLines = document.getElementById("svgLines");
-const infoEl = document.getElementById("info");
+(() => {
+  // ========= Example tree (you can replace this) =========
+  const EXAMPLE = {
+    val: 4,
+    left: { val:2, left:{val:1}, right:{val:3} },
+    right: { val:7, left:{val:6}, right:{val:9} }
+  };
 
-const baseTree = {
-    val:4,
-    left:{ val:2, left:{val:1}, right:{val:3} },
-    right:{ val:7, left:{val:6}, right:{val:9} }
-};
+  // ========= State =========
+  let steps = [];     // sequence of {action: 'visit'|'swap', id, val}
+  let stepIndex = 0;
 
-let steps = [];
-let stepIndex = 0;
-
-function clone(node){
+  // ========= Helpers: clone tree & give unique IDs =========
+  let _idCounter = 1;
+  function cloneWithId(node){
     if(!node) return null;
-    return { val:node.val, left:clone(node.left), right:clone(node.right) };
-}
+    const obj = { id: (_idCounter++), val: node.val, left: cloneWithId(node.left), right: cloneWithId(node.right) };
+    return obj;
+  }
 
-function recordSteps(node){
+  // Build steps: visit, recurse left, recurse right, then swap
+  function buildSteps(node){
     if(!node) return;
-    steps.push({action:"visit", nodeVal:node.val});
-    recordSteps(node.left);
-    recordSteps(node.right);
-    steps.push({action:"swap", nodeVal:node.val});
-}
+    steps.push({ action: 'visit', id: node.id, val: node.val });
+    buildSteps(node.left);
+    buildSteps(node.right);
+    steps.push({ action: 'swap', id: node.id, val: node.val });
+  }
 
-recordSteps(clone(baseTree));
+  const exampleRoot = cloneWithId(EXAMPLE);
+  buildSteps(cloneWithId(EXAMPLE)); // steps reference node ids by value (from another clone) — ids are consistent per structure
 
-function applySteps(root){
-    function find(n,val){
-        if(!n) return null;
-        if(n.val===val) return n;
-        return find(n.left,val)||find(n.right,val);
+  // ========= DOM refs =========
+  const canvas = document.getElementById('canvas');
+  const svg = document.getElementById('lines');
+  const infoEl = document.getElementById('info');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const runBtn = document.getElementById('runBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const wrap = document.getElementById('treeWrap');
+
+  // ========= Compute layout positions (in-order spacing) =========
+  function computePositions(rootClone){
+    // do inorder traversal to assign x indices
+    let order = 0;
+    const positions = new Map(); // id -> {x,y}
+    const levels = new Map(); // depth -> count (used for y)
+    function inorder(n, depth){
+      if(!n) return;
+      inorder(n.left, depth+1);
+      order++;
+      const spacingX = 110; // horizontal spacing between inorder positions
+      const x = order * spacingX;
+      const levelY = 100; // vertical spacing
+      const y = (depth * levelY) + 60; // offset top
+      positions.set(n.id, { x, y });
+      levels.set(depth, (levels.get(depth)||0)+1);
+      inorder(n.right, depth+1);
     }
-    for(let i=0;i<=stepIndex;i++){
-        const s = steps[i];
-        if(s.action==="swap"){
-            const target = find(root, s.nodeVal);
-            if(target){
-                let t = target.left;
-                target.left = target.right;
-                target.right = t;
-            }
+    inorder(rootClone, 0);
+
+    // center the whole tree: compute minX and maxX
+    let minX = Infinity, maxX = -Infinity;
+    for(const pos of positions.values()){
+      if(pos.x < minX) minX = pos.x;
+      if(pos.x > maxX) maxX = pos.x;
+    }
+    const canvasWidth = wrap.clientWidth || 800;
+    const treeWidth = Math.max(1, (maxX - minX));
+    const centerOffset = (canvasWidth/2) - (minX + treeWidth/2);
+
+    // apply centerOffset
+    const final = new Map();
+    for(const [id, p] of positions.entries()){
+      final.set(id, { x: p.x + centerOffset, y: p.y });
+    }
+    return final;
+  }
+
+  // ========= Apply steps to a clone to get current tree state =========
+  function clone(node){
+    if(!node) return null;
+    return { id: node.id, val: node.val, left: clone(node.left), right: clone(node.right) };
+  }
+  function applyStepsToClone(){
+    const rootClone = clone(exampleRoot);
+    for(let i=0;i<=stepIndex && i < steps.length; i++){
+      const s = steps[i];
+      if(s.action === 'swap'){
+        const n = findById(rootClone, s.id);
+        if(n){
+          const tmp = n.left;
+          n.left = n.right;
+          n.right = tmp;
         }
+      }
     }
-}
+    return rootClone;
+  }
 
-function renderNode(node, highlight){
-    if(!node) {
-        const gap = document.createElement("div");
-        gap.style.width = "40px";
-        return gap;
+  function findById(node, id){
+    if(!node) return null;
+    if(node.id === id) return node;
+    return findById(node.left, id) || findById(node.right, id);
+  }
+
+  // ========= DOM rendering of nodes using absolute positions =========
+  function renderNodesAndLines(){
+    const treeState = applyStepsToClone();
+    // compute positions based on inorder
+    const positions = computePositions(treeState);
+
+    // clear
+    canvas.innerHTML = '';
+    while(svg.firstChild) svg.removeChild(svg.firstChild);
+
+    // create node DOM elements (absolute) and store refs id->el
+    const idToEl = new Map();
+
+    function build(node){
+      if(!node) return null;
+      const pos = positions.get(node.id) || {x:0,y:0};
+      const el = document.createElement('div');
+      el.className = 'node-item';
+      el.style.left = pos.x + 'px';
+      el.style.top = pos.y + 'px';
+      el.dataset.id = node.id;
+
+      const bubble = document.createElement('div');
+      bubble.className = 'node-bubble';
+      bubble.textContent = node.val;
+      el.appendChild(bubble);
+
+      const lbl = document.createElement('div');
+      lbl.className = 'node-label';
+      lbl.textContent = ''; // optionally show id or value
+      el.appendChild(lbl);
+
+      canvas.appendChild(el);
+      idToEl.set(node.id, el);
+
+      // children
+      if(node.left) build(node.left);
+      if(node.right) build(node.right);
+    }
+    build(treeState);
+
+    // draw lines using positions (SVG)
+    const containerRect = wrap.getBoundingClientRect();
+    for(const [id, pos] of positions.entries()){
+      const node = findById(treeState, id);
+      if(!node) continue;
+      if(node.left){
+        const px = pos.x;
+        const py = pos.y;
+        const childPos = positions.get(node.left.id);
+        if(childPos){ drawLine(px, py, childPos.x, childPos.y); }
+      }
+      if(node.right){
+        const px = pos.x;
+        const py = pos.y;
+        const childPos = positions.get(node.right.id);
+        if(childPos){ drawLine(px, py, childPos.x, childPos.y); }
+      }
     }
 
-    const el = document.createElement("div");
-    el.className = "node";
-
-    const circle = document.createElement("div");
-    circle.className = "value";
-    circle.textContent = node.val;
-    if(node.val === highlight) circle.classList.add("current");
-
-    el.appendChild(circle);
-
-    if(node.left || node.right){
-        const kids = document.createElement("div");
-        kids.className = "children";
-        kids.appendChild(renderNode(node.left, highlight));
-        kids.appendChild(renderNode(node.right, highlight));
-        el.appendChild(kids);
+    // set highlight for current step's node (visit or swap)
+    const curStep = steps[stepIndex];
+    // remove any prior 'current' class
+    document.querySelectorAll('.node-bubble.current').forEach(el => el.classList.remove('current'));
+    if(curStep){
+      const targetEl = idToEl.get(curStep.id);
+      if(targetEl){
+        const bubble = targetEl.querySelector('.node-bubble');
+        if(bubble) bubble.classList.add('current');
+      }
     }
-    return el;
-}
 
-function drawLines(){
-    svgLines.innerHTML="";
+    return { idToEl, positions, treeState };
+  }
 
-    const treeRect = container.getBoundingClientRect();
-    svgLines.setAttribute("width", treeRect.width);
-    svgLines.setAttribute("height", treeRect.height);
+  function drawLine(x1,y1,x2,y2){
+    // SVG coordinates: we want line between centers of bubbles
+    const offset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--node-size')) || 44;
+    const r = parseFloat(offset)/2;
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1', x1);
+    line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2);
+    line.setAttribute('y2', y2);
+    line.setAttribute('stroke', '#6b7280');
+    line.setAttribute('stroke-width', '2');
+    line.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(line);
+  }
 
-    function connect(parentEl){
-        const kids = parentEl.querySelector(".children");
-        if(!kids) return;
-        const pRect = parentEl.querySelector(".value").getBoundingClientRect();
-
-        [...kids.children].forEach(child=>{
-            const v = child.querySelector(".value");
-            if(!v) return;
-            const cRect = v.getBoundingClientRect();
-
-            const line = document.createElementNS("http://www.w3.org/2000/svg","line");
-            line.setAttribute("x1", pRect.left + pRect.width/2 - treeRect.left);
-            line.setAttribute("y1", pRect.top + pRect.height/2 - treeRect.top);
-            line.setAttribute("x2", cRect.left + cRect.width/2 - treeRect.left);
-            line.setAttribute("y2", cRect.top + cRect.height/2 - treeRect.top);
-            svgLines.appendChild(line);
-
-            connect(child);
-        });
+  // ========= Cross-fade swap animation =========
+  // Steps:
+  //  - if current step is 'swap', find the rendered parent node; locate its left and right child DOM bubbles (by searching nearest positioned nodes with positions left/right)
+  //  - fade both child bubbles to opacity 0
+  //  - after fade finishes, swap the child positions in DOM by re-rendering (we'll swap by re-rendering full canvas based on new tree clone state)
+  //  - fade new child bubbles back to opacity 1 and redraw lines
+  function performSwapAnimation(step, done){
+    // render current state before swap to identify DOM refs
+    const pre = renderNodesAndLines();
+    const targetId = step.id;
+    const parentEl = pre.idToEl.get(targetId);
+    if(!parentEl){
+      // nothing to animate; just re-render and call done
+      render();
+      done();
+      return;
     }
-    connect(container.firstElementChild);
-}
 
-function render(){
-    const highlight = steps[stepIndex]?.nodeVal;
-    const treeClone = clone(baseTree);
-    applySteps(treeClone);
+    // find left and right child ids from the clone BEFORE the swap
+    const treeBefore = applyStepsToClone(); // includes swaps up to stepIndex (the swap hasn't been applied yet when calling performSwapAnimation)
+    const n = findById(treeBefore, targetId);
+    if(!n) { render(); done(); return; }
+    const leftId = n.left ? n.left.id : null;
+    const rightId = n.right ? n.right.id : null;
+    if(!leftId && !rightId){
+      // nothing to animate
+      render();
+      done();
+      return;
+    }
 
-    container.innerHTML = "";
-    container.appendChild(renderNode(treeClone, highlight));
+    // fade out child bubbles if they exist
+    const fadeEls = [];
+    if(leftId){
+      const leftDom = pre.idToEl.get(leftId);
+      if(leftDom){
+        const b = leftDom.querySelector('.node-bubble');
+        if(b){ fadeEls.push(b); b.classList.add('fading'); }
+      }
+    }
+    if(rightId){
+      const rightDom = pre.idToEl.get(rightId);
+      if(rightDom){
+        const b = rightDom.querySelector('.node-bubble');
+        if(b){ fadeEls.push(b); b.classList.add('fading'); }
+      }
+    }
 
-    setTimeout(drawLines, 20);
+    // after fade-out duration, apply swap to stepIndex state (so applyStepsToClone will reflect swap) by advancing temporary model
+    const fadeDuration = 320; // ms (matches CSS transition)
+    setTimeout(() => {
+      // Move stepIndex state: we have already applied swap in applyStepsToClone when rendering next state
+      // We'll re-render after applying the swap (swap already represented in state if we increment stepIndex first)
+      // For animation flow: increment stepIndex (so next render reflects swapped state).
+      // But caller will manage stepIndex; here we just re-render to show swapped state
+      // Re-render swapped state but keep bubbles invisible initially, then fade-in
+      // Increase stepIndex externally? We'll assume caller has already advanced stepIndex before calling performSwapAnimation.
+      const post = renderNodesAndLines(); // re-render with swap applied (caller increments stepIndex before calling)
+      // find swapped child bubbles (new DOM nodes)
+      const postLeftDom = post.idToEl.get(leftId);
+      const postRightDom = post.idToEl.get(rightId);
+      // set their bubbles to invisible then fade in
+      const toFadeIn = [];
+      if(postLeftDom){
+        const b = postLeftDom.querySelector('.node-bubble');
+        if(b){ b.style.opacity = 0; toFadeIn.push(b); }
+      }
+      if(postRightDom){
+        const b = postRightDom.querySelector('.node-bubble');
+        if(b){ b.style.opacity = 0; toFadeIn.push(b); }
+      }
+      // small delay to allow DOM paint
+      setTimeout(() => {
+        // fade in
+        toFadeIn.forEach(b => { b.style.transition = 'opacity .32s ease'; b.style.opacity = 1; });
+        // after fade-in finish, cleanup classes and finalize
+        setTimeout(() => {
+          // cleanup any lingering inline styles & classes
+          toFadeIn.forEach(b => { b.style.transition = ''; b.style.opacity = ''; });
+          document.querySelectorAll('.node-bubble.fading').forEach(b => b.classList.remove('fading'));
+          drawLines();
+          done();
+        }, 360);
+      }, 20);
+    }, fadeDuration);
+  }
 
+  // ========= Main render sequence (handles visiting vs swap animation) =========
+  function render(){
+    // If no steps yet, return
+    if(steps.length === 0){
+      infoEl.textContent = 'No steps available';
+      return;
+    }
+
+    // Determine current step
     const s = steps[stepIndex];
-    infoEl.textContent = s.action==="visit"
-        ? `Visiting node ${s.nodeVal}`
-        : `Swapping children of node ${s.nodeVal}`;
+    if(!s){
+      infoEl.textContent = 'Done';
+      return;
+    }
 
-    document.getElementById("prevBtn").disabled = (stepIndex===0);
-    document.getElementById("nextBtn").disabled = (stepIndex===steps.length-1);
-}
+    // If current action is 'visit' — just render static state
+    if(s.action === 'visit'){
+      // render the state up to stepIndex (visit doesn't change children) visually
+      const infoText = `Visiting node ${s.val} (id=${s.id})`;
+      infoEl.textContent = infoText;
+      renderNodesAndLines(); // static render (no animation)
+      updateButtons();
+      return;
+    }
 
-document.getElementById("prevBtn").onclick = ()=>{ stepIndex--; render(); };
-document.getElementById("nextBtn").onclick = ()=>{ stepIndex++; render(); };
-document.getElementById("runBtn").onclick = ()=>{
-    while(stepIndex < steps.length-1) stepIndex++;
+    // If current action is 'swap', perform cross-fade animation:
+    // Note: we must apply the swap in the tree state *before* rendering the swapped DOM for the fade-in step.
+    // We'll do: render pre-swap, fade out children, increment stepIndex's swap (apply it), render swapped DOM with faded children, fade-in.
+    // To implement in sync, caller should increment stepIndex BEFORE calling render for swap, so our applyStepsToClone includes the swap.
+    // But user navigation calls next() which increments stepIndex then calls render(); so here stepIndex already points to swap step.
+    // We need to render PRE-swap (i.e., state with swap not applied). So compute tmp clone where swap not yet applied.
+    // Approach: temporarily render pre-swap by applying steps up to stepIndex-1, animate fade-out, then render post-swap (apply stepIndex), fade-in.
+    if(s.action === 'swap'){
+      // Pre-swap render: show state up to stepIndex-1
+      const prevIndex = Math.max(0, stepIndex - 1);
+      const savedIndex = stepIndex; // keep
+      // render preview of prev state:
+      const prevStepIndex = stepIndex - 1;
+      // Render prev-state DOM
+      const realStepIndex = stepIndex;
+      // We'll temporarily render prev state by applying steps up to (stepIndex - 1)
+      // So store current stepIndex, temporarily set stepIndex to stepIndex-1 for rendering pre-swap
+      const oldIndex = stepIndex;
+      stepIndex = Math.max(0, stepIndex - 1);
+      const pre = renderNodesAndLines(); // pre-swap DOM drawn
+      // restore stepIndex to real value for subsequent operations
+      stepIndex = oldIndex;
+
+      // Mark info
+      infoEl.textContent = `Swapping children of node ${s.val} (id=${s.id}) — animating...`;
+
+      // Now perform cross-fade: fade children in pre DOM out, then render actual swapped state and fade them in
+      performSwapAnimation(s, () => {
+        updateButtons();
+      });
+      return;
+    }
+
+  }
+
+  function updateButtons(){
+    prevBtn.disabled = stepIndex <= 0;
+    nextBtn.disabled = stepIndex >= steps.length - 1;
+  }
+
+  // ========= Controls behavior =========
+  function doNext(){
+    if(stepIndex < steps.length - 1){
+      stepIndex++;
+      render();
+    }
+  }
+  function doPrev(){
+    if(stepIndex > 0){
+      stepIndex--;
+      render();
+    }
+  }
+  function runToEnd(){
+    function stepForward(){
+      if(stepIndex < steps.length - 1){
+        stepIndex++;
+        render();
+        // wait for potential animation before continuing
+        // safe short delay
+        setTimeout(stepForward, 420);
+      }
+    }
+    stepForward();
+  }
+  function doReset(){
+    stepIndex = 0;
     render();
-};
-document.getElementById("resetBtn").onclick = ()=>{ stepIndex=0; render(); };
+  }
 
-render();
+  nextBtn.addEventListener('click', doNext);
+  prevBtn.addEventListener('click', doPrev);
+  runBtn.addEventListener('click', runToEnd);
+  resetBtn.addEventListener('click', doReset);
+
+  // initial render
+  render();
+
+  // recompute lines on resize
+  window.addEventListener('resize', () => {
+    // small debounce
+    clearTimeout(window.__treeResizeTimer);
+    window.__treeResizeTimer = setTimeout(() => {
+      render();
+    }, 120);
+  });
 })();
 </script>
-
 </body>
 </html>
