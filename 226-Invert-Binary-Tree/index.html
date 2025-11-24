@@ -8,7 +8,7 @@
   :root{
     --bg:#f7fafc;
     --node-bg:#2563eb;
-    --node-size:44px;
+    --node-size:48px;
     --highlight:#f59e0b;
     --text:#111827;
   }
@@ -19,22 +19,26 @@
   button:disabled{opacity:.45;cursor:not-allowed}
   pre#info{background:#fff;padding:10px;border:1px solid #e6e6e6;border-radius:8px;min-height:46px;white-space:pre-wrap;margin-bottom:12px}
 
-  .tree-wrap{position:relative;border-radius:10px;padding:12px;background:linear-gradient(180deg,#ffffff,#fbfdff);box-shadow:0 4px 12px rgba(2,6,23,0.06);min-height:360px}
+  /* tree area */
+  .tree-wrap{position:relative;border-radius:10px;padding:12px;background:linear-gradient(180deg,#ffffff,#fbfdff);box-shadow:0 4px 12px rgba(2,6,23,0.06);min-height:420px}
   svg#lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
   .tree-canvas{position:relative;width:100%;height:100%}
 
+  /* nodes absolute positioned */
   .node-item{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;pointer-events:auto}
-  .node-bubble{width:var(--node-size);height:var(--node-size);border-radius:50%;background:var(--node-bg);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 6px 18px rgba(37,99,235,0.12);transition:opacity .28s ease, transform .18s ease}
+  .node-bubble{width:var(--node-size);height:var(--node-size);border-radius:50%;background:var(--node-bg);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 6px 18px rgba(37,99,235,0.12);transition:opacity .3s ease, transform .18s ease}
   .node-bubble.current{outline:4px solid var(--highlight);transform:scale(1.08)}
   .node-bubble.fading{opacity:0}
   .node-label{margin-top:6px;font-size:12px;color:#374151}
   line{stroke:#6b7280;stroke-width:2;stroke-linecap:round}
 
-  @media (max-width:700px){:root{--node-size:36px}}
+  @media (max-width:720px){
+    :root{--node-size:40px}
+  }
 </style>
 </head>
 <body>
-  <h1>LeetCode 226 — Invert Binary Tree</h1>
+  <h1>LeetCode 226 — Invert Binary Tree (classic layout + smooth cross-fade swaps)</h1>
 
   <div class="controls">
     <button id="prevBtn">Prev</button>
@@ -52,35 +56,34 @@
 
 <script>
 (() => {
-  // ---------------- Example tree ----------------
+  // ---------------- Example tree (replaceable) ----------------
   const EXAMPLE = {
     val: 4,
     left: { val:2, left:{val:1}, right:{val:3} },
     right: { val:7, left:{val:6}, right:{val:9} }
   };
 
-  // ---------------- State ----------------
+  // ---------------- state ----------------
   let steps = [];     // sequence of {action: 'visit'|'swap', id, val}
   let stepIndex = 0;
 
-  // ---------------- Helpers: clone with consistent ids ----------------
+  // ---------------- helpers: consistent id assignment ----------------
   let _idCounter = 1;
   function cloneWithId(node){
     if(!node) return null;
-    const obj = { id: (_idCounter++), val: node.val, left: cloneWithId(node.left), right: cloneWithId(node.right) };
-    return obj;
+    return { id: _idCounter++, val: node.val, left: cloneWithId(node.left), right: cloneWithId(node.right) };
   }
 
-  // create single canonical tree (used both for steps and rendering)
+  // build canonical tree copy (this is the single source-of-truth for ids)
   const exampleRoot = cloneWithId(EXAMPLE);
 
-  // build steps (visit, then recurse left/right, then swap) on same tree instance
+  // build steps (visit, recurse left, recurse right, swap) using the same exampleRoot structure
   function buildSteps(root){
     if(!root) return;
-    steps.push({ action:'visit', id: root.id, val: root.val });
+    steps.push({ action: 'visit', id: root.id, val: root.val });
     buildSteps(root.left);
     buildSteps(root.right);
-    steps.push({ action:'swap', id: root.id, val: root.val });
+    steps.push({ action: 'swap', id: root.id, val: root.val });
   }
   buildSteps(exampleRoot);
 
@@ -94,46 +97,22 @@
   const runBtn = document.getElementById('runBtn');
   const resetBtn = document.getElementById('resetBtn');
 
-  // ---------------- Layout: compute positions via inorder numbering (safe-guard visited) ----------------
-  function computePositions(rootClone){
-    const positions = new Map();
-    const visited = new Set();
-    let order = 0;
-    function inorder(node, depth){
-      if(!node || visited.has(node.id)) return;
-      // visited set prevents cycles if present
-      visited.add(node.id);
-      inorder(node.left, depth+1);
-      order++;
-      const spacingX = 110; // horizontal spacing
-      const x = order * spacingX;
-      const levelY = 100;
-      const y = (depth * levelY) + 60;
-      positions.set(node.id, { x, y });
-      inorder(node.right, depth+1);
-    }
-    inorder(rootClone, 0);
-
-    // center horizontally in wrap
-    let minX = Infinity, maxX = -Infinity;
-    positions.forEach(p => { if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x; });
-    if(minX === Infinity) minX = 0, maxX = 0;
-    const treeWidth = Math.max(1, maxX - minX);
-    const wrapWidth = wrap.clientWidth || 800;
-    const offset = (wrapWidth / 2) - (minX + treeWidth / 2);
-    const final = new Map();
-    positions.forEach((p, id) => final.set(id, { x: p.x + offset, y: p.y }));
-    return final;
-  }
-
-  // ---------------- Clone current tree state by applying swaps up to stepIndex ----------------
+  // ---------------- safety utilities ----------------
   function clone(node){
     if(!node) return null;
     return { id: node.id, val: node.val, left: clone(node.left), right: clone(node.right) };
   }
-  function applyStepsToClone(){
+
+  function findById(node, id){
+    if(!node) return null;
+    if(node.id === id) return node;
+    return findById(node.left, id) || findById(node.right, id);
+  }
+
+  // ---------------- apply swaps up to an index -> returns a clone representing current state ----------------
+  function applyStepsToClone(uptoIndex){
     const rootClone = clone(exampleRoot);
-    for(let i=0;i<=stepIndex && i < steps.length; i++){
+    for(let i=0;i<=uptoIndex && i < steps.length; i++){
       const s = steps[i];
       if(s.action === 'swap'){
         const n = findById(rootClone, s.id);
@@ -146,25 +125,53 @@
     }
     return rootClone;
   }
-  function findById(node, id){
-    if(!node) return null;
-    if(node.id === id) return node;
-    return findById(node.left, id) || findById(node.right, id);
+
+  // ---------------- layout: compute positions using inorder numbering (single pass), then center horizontally ----------------
+  function computePositions(rootClone){
+    const positions = new Map();
+    let order = 0;
+    const visited = new Set();
+
+    function inorder(n, depth){
+      if(!n || visited.has(n.id)) return;
+      visited.add(n.id);
+      inorder(n.left, depth+1);
+      order++;
+      const spacingX = 120; // adjust horizontal spacing as needed
+      const x = order * spacingX;
+      const levelY = 100;
+      const y = (depth * levelY) + 60;
+      positions.set(n.id, { x, y });
+      inorder(n.right, depth+1);
+    }
+    inorder(rootClone, 0);
+
+    // center
+    if(positions.size === 0) return positions;
+    let minX = Infinity, maxX = -Infinity;
+    positions.forEach(p => { if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x; });
+    const treeWidth = Math.max(1, maxX - minX);
+    const wrapWidth = wrap.clientWidth || 800;
+    const offset = (wrapWidth / 2) - (minX + treeWidth/2);
+
+    const final = new Map();
+    positions.forEach((p,id) => final.set(id, { x: p.x + offset, y: p.y }));
+    return final;
   }
 
-  // ---------------- Render nodes absolutely and draw svg lines ----------------
-  function renderNodesAndLines(initiallyInvisibleIds = new Set()){
-    const treeState = applyStepsToClone();
+  // ---------------- render nodes absolute + draw svg lines (positions from computePositions) ----------------
+  function renderNodesAndLines(initialInvisible = new Set()){
+    const treeState = applyStepsToClone(stepIndex); // render state up to current stepIndex
     const positions = computePositions(treeState);
 
-    // clear DOM & SVG
+    // clear canvas and svg
     canvas.innerHTML = '';
     while(svg.firstChild) svg.removeChild(svg.firstChild);
 
     const idToEl = new Map();
 
-    // create DOM nodes
-    function createNodeElements(node){
+    // create node elements
+    function create(node){
       if(!node) return;
       const pos = positions.get(node.id) || { x:0, y:0 };
       const el = document.createElement('div');
@@ -175,7 +182,7 @@
 
       const bubble = document.createElement('div');
       bubble.className = 'node-bubble';
-      if(initiallyInvisibleIds.has(node.id)) bubble.classList.add('fading'); // start invisible for post-swap fade-in
+      if(initialInvisible.has(node.id)) bubble.classList.add('fading'); // start invisible when requested
       bubble.textContent = node.val;
       el.appendChild(bubble);
 
@@ -187,33 +194,33 @@
       canvas.appendChild(el);
       idToEl.set(node.id, el);
 
-      createNodeElements(node.left);
-      createNodeElements(node.right);
+      create(node.left);
+      create(node.right);
     }
-    createNodeElements(treeState);
+    create(treeState);
 
-    // draw lines using positions (centers)
+    // draw lines
     positions.forEach((pos, id) => {
       const node = findById(treeState, id);
       if(!node) return;
       if(node.left){
-        const cpos = positions.get(node.left.id);
-        if(cpos) drawLine(pos.x, pos.y, cpos.x, cpos.y);
+        const childPos = positions.get(node.left.id);
+        if(childPos) drawLine(pos.x, pos.y, childPos.x, childPos.y);
       }
       if(node.right){
-        const cpos = positions.get(node.right.id);
-        if(cpos) drawLine(pos.x, pos.y, cpos.x, cpos.y);
+        const childPos = positions.get(node.right.id);
+        if(childPos) drawLine(pos.x, pos.y, childPos.x, childPos.y);
       }
     });
 
-    // highlight current step's node (visit or swap)
+    // highlight current node (visit or swap)
     document.querySelectorAll('.node-bubble.current').forEach(el => el.classList.remove('current'));
-    const cur = steps[stepIndex];
-    if(cur){
-      const el = idToEl.get(cur.id);
+    const curStep = steps[stepIndex];
+    if(curStep){
+      const el = idToEl.get(curStep.id);
       if(el){
-        const b = el.querySelector('.node-bubble');
-        if(b) b.classList.add('current');
+        const bubble = el.querySelector('.node-bubble');
+        if(bubble) bubble.classList.add('current');
       }
     }
 
@@ -222,105 +229,112 @@
 
   function drawLine(x1,y1,x2,y2){
     const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-    // use centers directly
     line.setAttribute('x1', x1);
     line.setAttribute('y1', y1);
     line.setAttribute('x2', x2);
     line.setAttribute('y2', y2);
+    line.setAttribute('stroke', '#6b7280');
+    line.setAttribute('stroke-width', '2');
+    line.setAttribute('stroke-linecap', 'round');
     svg.appendChild(line);
   }
 
-  // ---------------- Cross-fade swap animation (robust) ----------------
-  // We will:
-  //  - render PRE-swap state (apply steps up to stepIndex-1), fade out child bubbles
-  //  - then increment stepIndex (so swap is applied), re-render with child bubbles initially invisible, then fade them in
-  function animateSwapCrossFade(step, callback){
-    // PRE-SWAP: render prev state (stepIndex - 1)
+  // ---------------- cross-fade swap animation: PRE -> fade out children -> POST (swap applied) -> fade in ----------------
+  function animateCrossFadeSwap(step, done){
+    // PRE state index is stepIndex - 1
     const prevIndex = Math.max(0, stepIndex - 1);
-    // temporarily render prev-state: set stepIndex to prev, render pre DOM, then restore
-    const saved = stepIndex;
-    stepIndex = prevIndex;
-    const pre = renderNodesAndLines();
-    // restore stepIndex (will be advanced by caller before calling animation)
-    stepIndex = saved;
 
-    // find children ids from PRE state
-    const treeBefore = applyStepsToClone(); // with current stepIndex (we restored), we actually need the pre-swap tree; so temporarily compute it:
-    // but easier: compute treeBefore by applying up to prevIndex
-    function cloneUpTo(idx){
-      const rootClone = clone(exampleRoot);
-      for(let i=0;i<=idx && i < steps.length; i++){
-        const s = steps[i];
-        if(s.action==='swap'){
-          const n = findById(rootClone, s.id);
-          if(n){
-            const tmp = n.left; n.left = n.right; n.right = tmp;
-          }
-        }
-      }
-      return rootClone;
+    // Render PRE state (apply up to prevIndex)
+    const prevStateClone = applyStepsToClone(prevIndex);
+    const prevPositions = computePositions(prevStateClone);
+
+    // render pre DOM (temporarily) by using a helper that uses a specific 'upTo' index
+    function renderUpTo(upTo, initialInvisibleSet = new Set()){
+      // temporarily set global stepIndex to upTo to let renderNodesAndLines use that state
+      const saved = stepIndex;
+      stepIndex = upTo;
+      const res = renderNodesAndLines(initialInvisibleSet);
+      stepIndex = saved;
+      return res;
     }
-    const treePrev = cloneUpTo(prevIndex);
-    const targetNodeBefore = findById(treePrev, step.id);
-    const leftId = targetNodeBefore && targetNodeBefore.left ? targetNodeBefore.left.id : null;
-    const rightId = targetNodeBefore && targetNodeBefore.right ? targetNodeBefore.right.id : null;
 
-    // fade out pre-swap child bubbles if present
-    const fadeEls = [];
+    // pre DOM (no swap yet)
+    const pre = renderUpTo(prevIndex);
+
+    // identify children ids in pre-state for the target node
+    const treePrev = prevStateClone;
+    const targetPrev = findById(treePrev, step.id);
+    const leftId = targetPrev && targetPrev.left ? targetPrev.left.id : null;
+    const rightId = targetPrev && targetPrev.right ? targetPrev.right.id : null;
+
+    // fade out those child bubbles (if present)
     if(leftId){
       const leftDom = pre.idToEl.get(leftId);
       if(leftDom){
         const b = leftDom.querySelector('.node-bubble');
-        if(b) { b.classList.add('fading'); fadeEls.push(b); }
+        if(b) b.classList.add('fading');
       }
     }
     if(rightId){
       const rightDom = pre.idToEl.get(rightId);
       if(rightDom){
         const b = rightDom.querySelector('.node-bubble');
-        if(b) { b.classList.add('fading'); fadeEls.push(b); }
+        if(b) b.classList.add('fading');
       }
     }
 
+    // wait fade-out
     const fadeOutMs = 320;
     setTimeout(() => {
-      // advance stepIndex so swap is logically applied
-      // Note: caller already incremented stepIndex before calling animateSwapCrossFade in our flow; ensure caller increments
-      // Here we assume stepIndex already points to the swap step (that's how next() is implemented below)
-      // Re-render POST-swap with swapped tree, but make swapped child bubbles initially invisible and then fade-in
-      const postInitiallyInvisible = new Set();
-      if(leftId) postInitiallyInvisible.add(leftId);
-      if(rightId) postInitiallyInvisible.add(rightId);
+      // Now render POST (swap is applied up to current stepIndex)
+      // We'll render POST with the swapped child ids initially invisible (so we can fade them in)
+      const initialInvisible = new Set();
+      if(leftId) initialInvisible.add(leftId);
+      if(rightId) initialInvisible.add(rightId);
 
-      const post = renderNodesAndLines(postInitiallyInvisible);
+      const post = renderUpTo(stepIndex, initialInvisible);
 
-      // force children invisible, then fade-in
-      postInitiallyInvisible.forEach(id => {
-        const dom = post.idToEl.get(id);
-        if(dom){
-          const b = dom.querySelector('.node-bubble');
-          if(b){
-            b.style.opacity = '0';
-            b.style.transition = 'opacity .32s ease';
-            // small timeout to ensure style applied
-            setTimeout(()=> b.style.opacity = '1', 20);
-            // cleanup later
-            setTimeout(()=> { b.style.transition = ''; b.style.opacity = ''; }, 400);
+      // small delay then fade-in targeted child bubbles
+      setTimeout(() => {
+        if(leftId){
+          const ld = post.idToEl.get(leftId);
+          if(ld){
+            const b = ld.querySelector('.node-bubble');
+            if(b){
+              b.style.opacity = '0';
+              b.style.transition = 'opacity .32s ease';
+              // trigger paint then fade in
+              requestAnimationFrame(()=> requestAnimationFrame(()=> b.style.opacity = '1'));
+              // cleanup later
+              setTimeout(()=> { b.style.transition = ''; b.style.opacity = ''; }, 420);
+            }
           }
         }
-      });
+        if(rightId){
+          const rd = post.idToEl.get(rightId);
+          if(rd){
+            const b = rd.querySelector('.node-bubble');
+            if(b){
+              b.style.opacity = '0';
+              b.style.transition = 'opacity .32s ease';
+              requestAnimationFrame(()=> requestAnimationFrame(()=> b.style.opacity = '1'));
+              setTimeout(()=> { b.style.transition = ''; b.style.opacity = ''; }, 420);
+            }
+          }
+        }
 
-      // after fade-in end, finalize (redraw lines)
-      setTimeout(() => {
-        drawLines(); // ensure lines match final positions
-        // cleanup any transient 'fading' classes
-        document.querySelectorAll('.node-bubble.fading').forEach(el => el.classList.remove('fading'));
-        callback && callback();
-      }, 420);
+        // finalize after fade-in
+        setTimeout(() => {
+          // cleanup any fading classes left behind
+          document.querySelectorAll('.node-bubble.fading').forEach(el => el.classList.remove('fading'));
+          drawLines();
+          done && done();
+        }, 460);
+      }, 30);
     }, fadeOutMs);
   }
 
-  // ---------------- Main render flow ----------------
+  // ---------------- main render logic ----------------
   function render(){
     if(steps.length === 0) return;
     const s = steps[stepIndex];
@@ -328,28 +342,28 @@
 
     if(s.action === 'visit'){
       infoEl.textContent = `Visiting node ${s.val} (id=${s.id})`;
-      renderNodesAndLines(); // static
+      // render state up to current stepIndex (visit step does not change children)
+      renderNodesAndLines(new Set());
       updateButtons();
       return;
     }
 
     if(s.action === 'swap'){
-      // swap step animation: caller should have incremented stepIndex already (we implement next() to increment then call render)
-      // animate cross-fade: we pass the step object (which has id/val)
-      infoEl.textContent = `Swapping children of node ${s.val} (id=${s.id}) — animating`;
-      animateSwapCrossFade(s, () => {
+      infoEl.textContent = `Swapping children of node ${s.val} (id=${s.id}) — animating...`;
+      // animate cross-fade. Note: stepIndex should already point to this swap step (caller increments before calling render)
+      animateCrossFadeSwap(s, () => {
         updateButtons();
       });
       return;
     }
   }
 
+  // ---------------- controls ----------------
   function updateButtons(){
     prevBtn.disabled = stepIndex <= 0;
     nextBtn.disabled = stepIndex >= steps.length - 1;
   }
 
-  // ---------------- Controls (increment stepIndex appropriately) ----------------
   function doNext(){
     if(stepIndex >= steps.length - 1) return;
     stepIndex++;
@@ -365,8 +379,7 @@
       if(stepIndex < steps.length - 1){
         stepIndex++;
         render();
-        // wait sufficiently for possible animation
-        setTimeout(stepForward, 480);
+        setTimeout(stepForward, 520); // leave time for possible animations
       }
     }
     stepForward();
@@ -384,8 +397,8 @@
   // initial paint
   render();
 
-  // redraw on resize
-  window.addEventListener('resize', () => { clearTimeout(window.__treeResizeTimer); window.__treeResizeTimer = setTimeout(render, 120); });
+  // redraw lines on resize
+  window.addEventListener('resize', () => { clearTimeout(window.__resizeTimer); window.__resizeTimer = setTimeout(render, 140); });
 
 })();
 </script>
