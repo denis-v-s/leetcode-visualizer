@@ -1,36 +1,54 @@
-<div id="invertTreePreview"></div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Invert Binary Tree Visualization</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 20px; background:#f7fafc; }
+  h2 { margin: 0 0 12px 0; }
+  .controls { display:flex; gap:8px; margin-bottom:12px; }
+  button { padding:8px; border-radius:6px; border:1px solid #cbd5e1; background:#fff; cursor:pointer; }
+  button:disabled { opacity:0.5; cursor:not-allowed; }
+
+  .tree { display:flex; justify-content:center; margin-top:20px; flex-direction:column; align-items:center; position:relative; }
+  .node { display:flex; flex-direction:column; align-items:center; margin:20px; position:relative; transition: all 0.5s ease; }
+  .value { width:30px; height:30px; border-radius:50%; background:#3b82f6; color:white; display:flex; justify-content:center; align-items:center; font-weight:bold; transition: transform 0.3s; z-index:1; position:relative; }
+  .current { outline:3px solid #f59e0b; transform:scale(1.2); }
+  .children { display:flex; gap:60px; margin-top:40px; justify-content:center; position:relative; }
+  .line { position:absolute; width:2px; background:#6b7280; z-index:0; }
+  pre { background:#fff; padding:10px; border-radius:8px; border:1px solid #e6e6e6; min-height:50px; white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<h2>LeetCode 226: Invert Binary Tree — Step Visualization</h2>
+
+<div class="controls">
+  <button id="prevBtn">Prev</button>
+  <button id="nextBtn">Next</button>
+  <button id="runBtn">Run to End</button>
+  <button id="resetBtn">Reset</button>
+</div>
+
+<pre id="info"></pre>
+<div id="treeContainer" class="tree"></div>
 
 <script>
 (function(){
-  const container = document.getElementById('invertTreePreview');
-  container.innerHTML = `
-    <style>
-      .controls { display:flex; gap:8px; margin-bottom:12px; }
-      .tree { display:flex; justify-content:center; margin-top:20px; flex-direction:column; align-items:center; }
-      .node { display:flex; flex-direction:column; align-items:center; margin:5px; transition: transform 0.3s; }
-      .value { width:30px; height:30px; border-radius:50%; background:#3b82f6; color:white; display:flex; justify-content:center; align-items:center; font-weight:bold; transition: transform 0.3s; }
-      .current { outline:3px solid #f59e0b; transform:scale(1.2); }
-      .children { display:flex; gap:40px; margin-top:8px; justify-content:center; }
-      pre { background:#fff; padding:10px; border-radius:8px; border:1px solid #e6e6e6; min-height:50px; }
-    </style>
-    <div class="controls">
-      <button id="prevBtn">Prev</button>
-      <button id="nextBtn">Next</button>
-      <button id="runBtn">Run to End</button>
-      <button id="resetBtn">Reset</button>
-    </div>
-    <pre id="info"></pre>
-    <div id="treeContainer" class="tree"></div>
-  `;
+  const container = document.getElementById('treeContainer');
+  const infoEl = document.getElementById('info');
 
+  // Example tree
   const treeExample = { val:4, left:{val:2,left:{val:1},right:{val:3}}, right:{val:7,left:{val:6},right:{val:9}} };
+
   let steps = [], stepIndex = 0;
 
+  // Clone tree
   function cloneTree(node){
     if(!node) return null;
     return { val: node.val, left: cloneTree(node.left), right: cloneTree(node.right) };
   }
 
+  // Build steps: visit + swap
   function invertTreeSteps(node){
     if(!node) return null;
     steps.push({action:'visit', node});
@@ -45,11 +63,9 @@
   const root = cloneTree(treeExample);
   invertTreeSteps(cloneTree(root));
 
-  const treeContainer = container.querySelector('#treeContainer');
-  const infoEl = container.querySelector('#info');
-
+  // Render tree recursively
   function renderTree(node, highlightNode){
-    if(!node) return null;
+    if(!node) return document.createElement('div');
     const nodeEl = document.createElement('div');
     nodeEl.className = 'node';
     const valEl = document.createElement('div');
@@ -61,19 +77,33 @@
     if(node.left || node.right){
       const childrenEl = document.createElement('div');
       childrenEl.className = 'children';
-      childrenEl.appendChild(renderTree(node.left, highlightNode) || document.createElement('div'));
-      childrenEl.appendChild(renderTree(node.right, highlightNode) || document.createElement('div'));
+      childrenEl.appendChild(renderTree(node.left, highlightNode));
+      childrenEl.appendChild(renderTree(node.right, highlightNode));
       nodeEl.appendChild(childrenEl);
     }
+
     return nodeEl;
   }
 
+  // Find node by value
   function findNode(node, val){
     if(!node) return null;
     if(node.val === val) return node;
     return findNode(node.left,val) || findNode(node.right,val);
   }
 
+  // Animate swap between left and right
+  function animateSwap(node){
+    if(!node || (!node.left && !node.right)) return;
+    const childrenEl = container.querySelector(`.node[data-val='${node.val}'] > .children`);
+    if(childrenEl && childrenEl.children.length === 2){
+      childrenEl.style.transition = 'all 0.5s ease';
+      childrenEl.style.flexDirection = 'row-reverse';
+      setTimeout(()=>{ childrenEl.style.flexDirection = 'row'; },500); // reset for next step
+    }
+  }
+
+  // Render step
   function render(){
     const treeClone = cloneTree(root);
     for(let i=0;i<=stepIndex;i++){
@@ -85,26 +115,44 @@
         }
       }
     }
-    treeContainer.innerHTML = '';
+    container.innerHTML = '';
     const highlight = steps[stepIndex] ? steps[stepIndex].node : null;
-    treeContainer.appendChild(renderTree(treeClone, highlight));
+
+    function addDataAttr(nodeEl, node){
+      nodeEl.setAttribute('data-val', node.val);
+      if(node.left || node.right){
+        const childrenEl = nodeEl.querySelector('.children');
+        if(childrenEl){
+          const childrenNodes = [node.left, node.right];
+          Array.from(childrenEl.children).forEach((cEl,i)=>addDataAttr(cEl, childrenNodes[i]));
+        }
+      }
+    }
+
+    const treeEl = renderTree(treeClone, highlight);
+    addDataAttr(treeEl, treeClone);
+    container.appendChild(treeEl);
 
     const s = steps[stepIndex];
     if(s.action==='visit') infoEl.textContent = `Visiting node ${s.node.val}`;
-    else if(s.action==='swap') infoEl.textContent = `Swapped children of node ${s.node.val}`;
+    else if(s.action==='swap') {
+      infoEl.textContent = `Swapped children of node ${s.node.val}`;
+      animateSwap(s.node);
+    }
 
-    container.querySelector('#prevBtn').disabled = stepIndex===0;
-    container.querySelector('#nextBtn').disabled = stepIndex>=steps.length-1;
+    document.getElementById('prevBtn').disabled = stepIndex===0;
+    document.getElementById('nextBtn').disabled = stepIndex>=steps.length-1;
   }
 
   function next(){ if(stepIndex<steps.length-1){ stepIndex++; render(); } }
   function prev(){ if(stepIndex>0){ stepIndex--; render(); } }
-
-  container.querySelector('#nextBtn').addEventListener('click', next);
-  container.querySelector('#prevBtn').addEventListener('click', prev);
-  container.querySelector('#runBtn').addEventListener('click', ()=>{ while(stepIndex<steps.length-1){ stepIndex++; } render(); });
-  container.querySelector('#resetBtn').addEventListener('click', ()=>{ stepIndex=0; render(); });
+  document.getElementById('nextBtn').addEventListener('click', next);
+  document.getElementById('prevBtn').addEventListener('click', prev);
+  document.getElementById('runBtn').addEventListener('click', ()=>{ while(stepIndex<steps.length-1){ stepIndex++; } render(); });
+  document.getElementById('resetBtn').addEventListener('click', ()=>{ stepIndex=0; render(); });
 
   render();
 })();
 </script>
+</body>
+</html>
