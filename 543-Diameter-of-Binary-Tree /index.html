@@ -75,7 +75,7 @@
         }
         .metric-label { font-size: 12px; color: #777; text-transform: uppercase; letter-spacing: 1px;}
         .metric-val { font-size: 24px; font-weight: bold; color: #333; }
-        .metric-val.highlight { color: #10b981; animation: pop 0.3s ease; }
+        .metric-val.highlight { color: var(--node-new-max); animation: pop 0.3s ease; }
 
         @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
 
@@ -127,6 +127,7 @@
             font: 10px sans-serif;
             fill: var(--text-sub);
             text-anchor: middle;
+            pointer-events: none;
         }
 
         .link {
@@ -191,10 +192,10 @@
 
     // Test cases
     const testCases = [
-        [1,2,3,4,5], // Standard
-        [1,2],       // Small
-        [1,2,null,3,null,4,null], // Skewed
-        [1,2,3,4,5,null,null,6,null,7,null,8] // Path not through root (Answer 4, via node 2)
+        [1,2,3,4,5], 
+        [1,2],       
+        [1,2,null,3,null,4,null], 
+        [1,2,3,4,5,null,null,6,null,7,null,8] 
     ];
 
     // --- Tree Logic ---
@@ -204,7 +205,7 @@
             this.id = id; 
             this.left = null;
             this.right = null;
-            this.status = 'idle'; // idle, visiting, calculating, new-max
+            this.status = 'idle';
             
             // Visualization stats
             this.leftH = "?";
@@ -251,7 +252,7 @@
     // --- The Algorithm (Record Logic) ---
     function generateSnapshots(initialRoot) {
         let history = [];
-        let globalAns = 0; // The 'ans' variable in your Python code
+        let globalAns = 0;
 
         function save(msg, rootState, highlightAns = false) {
             history.push({
@@ -262,7 +263,6 @@
             });
         }
 
-        // Helper to update specific node in the clone
         function findNode(root, id) {
             if (!root) return null;
             if (root.id === id) return root;
@@ -285,30 +285,33 @@
             let leftId = node.left ? node.left.id : null;
             let leftHeight = helper(leftId);
             
-            // Refresh node ref
+            // Refresh node ref and update L value
             node = findNode(simulationRoot, nodeId); 
-            node.leftH = leftHeight; // Update UI for left return
+            node.leftH = leftHeight; 
+            save(`Node ${node.val}: Left height returned ${leftHeight}`, simulationRoot);
 
             // 3. Right Recursion
             let rightId = node.right ? node.right.id : null;
             let rightHeight = helper(rightId);
             
-            // Refresh node ref
+            // Refresh node ref and update R value
             node = findNode(simulationRoot, nodeId);
-            node.rightH = rightHeight; // Update UI for right return
+            node.rightH = rightHeight; 
+            save(`Node ${node.val}: Right height returned ${rightHeight}`, simulationRoot);
+
 
             // 4. Calculate Diameter Logic
             node.status = 'calculating';
             let currentPath = leftHeight + rightHeight;
             node.localDiameter = currentPath;
             
-            let msg = `At Node ${node.val}: Left(${leftHeight}) + Right(${rightHeight}) = ${currentPath}`;
+            let msg = `At Node ${node.val}: Path length = ${leftHeight} + ${rightHeight} = ${currentPath}`;
             let highlight = false;
 
             if (currentPath > globalAns) {
                 globalAns = currentPath;
                 node.status = 'new-max'; // Green highlight
-                msg += `. New Max Found!`;
+                msg += `. NEW MAX DIAMETER FOUND!`;
                 highlight = true;
             } else {
                 msg += `. Not greater than max (${globalAns}).`;
@@ -317,8 +320,7 @@
             save(msg, simulationRoot, highlight);
 
             // 5. Return height
-            // Reset status briefly to show we are moving up
-            if (node.status === 'new-max') node.status = 'idle'; // clear highlight
+            if (node.status !== 'new-max') node.status = 'idle'; // clear highlight
             
             let returnHeight = Math.max(leftHeight, rightHeight) + 1;
             return returnHeight;
@@ -346,7 +348,6 @@
             return;
         }
 
-        // Fix: Explicitly define children for hierarchy
         const hierarchy = d3.hierarchy(rootNode, d => {
             let children = [];
             if (d.left) children.push(d.left);
@@ -386,17 +387,15 @@
             .attr("dy", "1px")
             .text(d => d.data.val);
 
-        // Stats Text (L and R values)
-        // Left Height Label
+        // Stats Text (L and R values) - NOW USING UNIQUE CLASSES FOR RELIABLE UPDATE
         nodesEnter.append("text")
-            .attr("class", "stat-label")
+            .attr("class", "stat-label left-label") // <-- UNIQUE CLASS
             .attr("x", -28)
             .attr("y", 5)
             .text(d => `L:${d.data.leftH}`);
             
-        // Right Height Label
         nodesEnter.append("text")
-            .attr("class", "stat-label")
+            .attr("class", "stat-label right-label") // <-- UNIQUE CLASS
             .attr("x", 28)
             .attr("y", 5)
             .text(d => `R:${d.data.rightH}`);
@@ -408,22 +407,18 @@
             .attr("transform", d => `translate(${d.x},${d.y})`)
             .attr("class", d => `node ${d.data.status}`);
         
-        // Update stats text
-        nodesUpdate.selectAll(".stat-label")
-             .text((d, i, n) => {
-                 // n[0] is Left text, n[1] is Right text based on append order
-                 // But cleaner to select by index or re-select
-                 // Simple approach: re-select based on index doesn't work easily in merge
-                 // Let's just re-set text based on x attr which we know
-                 let xVal = d3.select(n[i]).attr("x");
-                 if (xVal < 0) return `L:${d.data.leftH}`;
-                 return `R:${d.data.rightH}`;
-             });
+        // --- FIX: Update using specific classes ---
+        nodesUpdate.select(".left-label")
+            .text(d => `L:${d.data.leftH}`);
+            
+        nodesUpdate.select(".right-label")
+            .text(d => `R:${d.data.rightH}`);
+        // -----------------------------------------
 
         nodes.exit().remove();
     }
 
-    // --- Controller Logic ---
+    // --- Controller Logic (Unchanged) ---
 
     function loadTestCase(index) {
         stopAutoPlay();
@@ -438,11 +433,9 @@
         if (!snapshots[currentStepIndex]) return;
         const s = snapshots[currentStepIndex];
         
-        // Update Text
         d3.select("#status-text").text(s.message);
         d3.select("#step-counter").text(`Step: ${currentStepIndex + 1}/${snapshots.length}`);
         
-        // Update Dashboard
         const ansEl = document.getElementById("global-ans");
         ansEl.innerText = s.ans;
         if (s.highlightAns) {
