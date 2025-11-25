@@ -108,6 +108,7 @@
             font: 10px sans-serif;
             fill: #555;
             text-anchor: middle;
+            pointer-events: none;
         }
 
         .link {
@@ -231,7 +232,6 @@
         }
 
         // Helper to update specific node in the clone for visualization updates
-        // We need to modify the 'simulationRoot' structure during recursion
         function findNode(root, id) {
             if (!root) return null;
             if (root.id === id) return root;
@@ -241,7 +241,7 @@
         let simulationRoot = cloneTree(initialRoot);
         save("Initial State", simulationRoot);
 
-        // The Python Solution Logic translated
+        // The Solution Logic
         function dfs(nodeId) {
             let node = findNode(simulationRoot, nodeId);
             if (!node) return 0;
@@ -254,7 +254,7 @@
             let leftId = node.left ? node.left.id : null;
             let left = dfs(leftId);
             
-            // Refresh node ref as recursive calls might have triggered saves/clones
+            // Refresh node ref
             node = findNode(simulationRoot, nodeId); 
 
             if (left === -1) {
@@ -321,7 +321,15 @@
             return;
         }
 
-        const hierarchy = d3.hierarchy(rootNode);
+        // --- FIXED: Explicitly tell D3 how to find children (left/right) ---
+        const hierarchy = d3.hierarchy(rootNode, d => {
+            let children = [];
+            if (d.left) children.push(d.left);
+            if (d.right) children.push(d.right);
+            return children;
+        });
+        // ------------------------------------------------------------------
+
         const treeData = treeLayout(hierarchy);
 
         // Links
@@ -354,10 +362,10 @@
             .attr("dy", "1px")
             .text(d => d.data.val);
 
-        // Height Badge (New for this problem)
+        // Height Badge
         nodesEnter.append("text")
             .attr("class", "height-label")
-            .attr("x", 28) // Position to right of circle
+            .attr("x", 28)
             .attr("y", 5)
             .text(d => d.data.heightVal !== null ? `H:${d.data.heightVal}` : "");
 
@@ -368,7 +376,7 @@
             .attr("transform", d => `translate(${d.x},${d.y})`)
             .attr("class", d => `node ${d.data.status}`);
         
-        // Update Height Text specifically
+        // Update Height Text
         nodesUpdate.select(".height-label")
             .text(d => d.data.heightVal !== null ? `H:${d.data.heightVal}` : "")
             .attr("opacity", d => d.data.heightVal !== null ? 1 : 0);
