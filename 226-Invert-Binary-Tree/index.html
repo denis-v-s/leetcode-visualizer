@@ -1,373 +1,443 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Invert Binary Tree — Visualization (LC 226)</title>
-<style>
-  :root{
-    --bg:#f7fafc;
-    --node-bg:#2563eb;
-    --node-size:48px;
-    --highlight:#f59e0b;
-    --text:#111827;
-  }
-  body{font-family:Inter,Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text);padding:18px;margin:0;}
-  .page { max-width:1100px;margin:12px auto; }
-  h1{margin:0 0 12px 0;font-size:20px}
-  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
-  button{padding:8px 12px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;cursor:pointer}
-  button:disabled{opacity:.45;cursor:not-allowed}
-  pre#info{background:#fff;padding:10px;border:1px solid #e6e6e6;border-radius:8px;min-height:48px;white-space:pre-wrap;margin-bottom:12px}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeetCode 226: Invert Binary Tree Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --node-fill: #ffffff;
+            --node-stroke: #333;
+            --node-highlight: #3b82f6;
+            --node-processed: #10b981;
+            --link-stroke: #ccc;
+        }
 
-  .tree-wrap{position:relative;border-radius:10px;padding:12px;background:linear-gradient(180deg,#ffffff,#fbfdff);box-shadow:0 6px 18px rgba(2,6,23,0.06);min-height:420px; overflow:visible}
-  svg#lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
-  .tree-canvas{position:relative;width:100%;height:100%}
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
 
-  .node-item{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;pointer-events:auto}
-  .node-bubble{width:var(--node-size);height:var(--node-size);border-radius:50%;background:var(--node-bg);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 8px 24px rgba(37,99,235,0.12);transition:opacity .32s ease, transform .22s ease}
-  .node-bubble.current{outline:4px solid var(--highlight);transform:scale(1.08)}
-  .node-bubble.fading{opacity:0}
-  .node-label{margin-top:8px;font-size:12px;color:#374151}
-  line{stroke:#6b7280;stroke-width:2;stroke-linecap:round}
+        h1 { margin-bottom: 10px; color: #333; }
+        h3 { margin-top: 0; color: #666; font-weight: 400; font-size: 1rem; }
+        
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
 
-  @media (max-width:700px){:root{--node-size:40px}}
-</style>
+        button {
+            padding: 8px 16px;
+            cursor: pointer;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        button:hover { background-color: #555; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        select {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+
+        /* Visualization Area */
+        #tree-container {
+            width: 100%;
+            max-width: 800px;
+            height: 500px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Status Bar */
+        #status-bar {
+            margin-top: 15px;
+            font-family: 'Courier New', Courier, monospace;
+            background: #2d3748;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 760px;
+            min-height: 20px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .step-counter { color: #aaa; }
+
+        /* D3 Styles */
+        .node circle {
+            fill: var(--node-fill);
+            stroke: var(--node-stroke);
+            stroke-width: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .node text {
+            font: 14px sans-serif;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            pointer-events: none;
+        }
+
+        .link {
+            fill: none;
+            stroke: var(--link-stroke);
+            stroke-width: 2px;
+            transition: all 0.5s ease;
+        }
+
+        /* Animation States */
+        .node.visiting circle { fill: #fbbf24; stroke: #d97706; transform: scale(1.1); }
+        .node.swapping circle { fill: var(--node-highlight); stroke: #2563eb; }
+        .node.done circle { fill: var(--node-processed); stroke: #059669; }
+
+    </style>
 </head>
 <body>
-  <div class="page">
-    <h1>LeetCode 226 — Invert Binary Tree (centered layout + cross-fade swap)</h1>
+
+    <h1>LeetCode 226: Invert Binary Tree</h1>
+    <h3>Visualizing Post-Order Traversal (Left &rarr; Right &rarr; Swap)</h3>
 
     <div class="controls">
-      <button id="prevBtn">Prev</button>
-      <button id="nextBtn">Next</button>
-      <button id="runBtn">Run to End</button>
-      <button id="resetBtn">Reset</button>
+        <label>Test Case:</label>
+        <select id="test-case-select">
+            <option value="0">[4, 2, 7, 1, 3, 6, 9]</option>
+            <option value="1">[2, 1, 3]</option>
+            <option value="2">[1, 2]</option>
+            <option value="3">[10, 5, 15, 3, 7, null, 18]</option>
+        </select>
+        
+        <div style="width: 20px;"></div> <button id="btn-prev">Prev</button>
+        <button id="btn-play">Auto Play</button>
+        <button id="btn-next">Next</button>
+        <button id="btn-reset">Reset</button>
     </div>
 
-    <pre id="info">Step info will appear here</pre>
+    <div id="tree-container"></div>
 
-    <div class="tree-wrap" id="treeWrap">
-      <svg id="lines" xmlns="http://www.w3.org/2000/svg"></svg>
-      <div id="canvas" class="tree-canvas"></div>
+    <div id="status-bar">
+        <span id="status-text">Ready</span>
+        <span class="step-counter" id="step-counter">Step: 0/0</span>
     </div>
-  </div>
 
 <script>
-(() => {
-  // ---------------- Example tree ----------------
-  const EXAMPLE = {
-    val: 4,
-    left: { val:2, left:{val:1}, right:{val:3} },
-    right: { val:7, left:{val:6}, right:{val:9} }
-  };
+    // --- Configuration ---
+    const width = 800;
+    const height = 500;
+    const duration = 750; // Animation duration in ms
 
-  // ---------------- State ----------------
-  let steps = [];     // { action: 'visit'|'swap', id, val }
-  let stepIndex = 0;
+    // --- State Management ---
+    let snapshots = [];
+    let currentStepIndex = 0;
+    let autoPlayInterval = null;
 
-  // ---------------- Helpers: clone with stable unique IDs ----------------
-  let _idCounter = 1;
-  function cloneWithId(node){
-    if(!node) return null;
-    return { id: (_idCounter++), val: node.val, left: cloneWithId(node.left), right: cloneWithId(node.right) };
-  }
+    // Test cases (LeetCode array format)
+    const testCases = [
+        [4, 2, 7, 1, 3, 6, 9],
+        [2, 1, 3],
+        [1, 2],
+        [10, 5, 15, 3, 7, null, 18]
+    ];
 
-  // Build a single canonical tree (used for steps and base structure)
-  const canonicalRoot = cloneWithId(EXAMPLE);
-
-  // Build steps (visit, recurse left, recurse right, swap) on canonical tree
-  function buildSteps(root){
-    if(!root) return;
-    steps.push({ action:'visit', id: root.id, val: root.val });
-    buildSteps(root.left);
-    buildSteps(root.right);
-    steps.push({ action:'swap', id: root.id, val: root.val });
-  }
-  buildSteps(canonicalRoot);
-
-  // ---------------- DOM refs ----------------
-  const wrap = document.getElementById('treeWrap');
-  const canvas = document.getElementById('canvas');
-  const svg = document.getElementById('lines');
-  const infoEl = document.getElementById('info');
-  const prevBtn = document.getElementById('prevBtn');
-  const nextBtn = document.getElementById('nextBtn');
-  const runBtn = document.getElementById('runBtn');
-  const resetBtn = document.getElementById('resetBtn');
-
-  // ---------------- Utility functions ----------------
-  function clone(node){
-    if(!node) return null;
-    return { id: node.id, val: node.val, left: clone(node.left), right: clone(node.right) };
-  }
-  function findById(node, id){
-    if(!node) return null;
-    if(node.id === id) return node;
-    return findById(node.left, id) || findById(node.right, id);
-  }
-
-  // Apply swaps up to index (inclusive)
-  function treeStateAt(index){
-    const rootClone = clone(canonicalRoot);
-    for(let i=0;i<=index && i < steps.length; i++){
-      const s = steps[i];
-      if(s.action === 'swap'){
-        const n = findById(rootClone, s.id);
-        if(n){
-          const tmp = n.left;
-          n.left = n.right;
-          n.right = tmp;
+    // --- Tree Helpers ---
+    
+    // Simple TreeNode class
+    class TreeNode {
+        constructor(val, id) {
+            this.val = val;
+            this.id = id; // Unique ID for D3 to track movement
+            this.left = null;
+            this.right = null;
+            this.status = 'idle'; // idle, visiting, swapping, done
         }
-      }
     }
-    return rootClone;
-  }
 
-  // ---------------- Layout: compute inorder positions (guarded) ----------------
-  function computePositions(root){
-    const positions = new Map();
-    let order = 0;
-    const visited = new Set();
-    function inorder(node, depth){
-      if(!node || visited.has(node.id)) return;
-      visited.add(node.id);
-      inorder(node.left, depth+1);
-      order++;
-      const spacingX = 120;
-      const x = order * spacingX;
-      const levelY = 120;
-      const y = (depth * levelY) + 60;
-      positions.set(node.id, { x, y });
-      inorder(node.right, depth+1);
+    // Convert LeetCode array to Tree Object
+    function arrayToTree(arr) {
+        if (!arr || arr.length === 0) return null;
+        
+        // Create nodes with unique IDs
+        let nodes = arr.map((val, index) => val !== null ? new TreeNode(val, index) : null);
+        let root = nodes[0];
+        let queue = [root];
+        let i = 1;
+
+        while (i < arr.length) {
+            let current = queue.shift();
+            
+            if (i < arr.length && nodes[i]) {
+                current.left = nodes[i];
+                queue.push(nodes[i]);
+            }
+            i++;
+
+            if (i < arr.length && nodes[i]) {
+                current.right = nodes[i];
+                queue.push(nodes[i]);
+            }
+            i++;
+        }
+        return root;
     }
-    inorder(root, 0);
 
-    // center horizontally
-    let minX = Infinity, maxX = -Infinity;
-    positions.forEach(p => { if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x; });
-    if(minX === Infinity){ minX = 0; maxX = 0; }
-    const treeWidth = Math.max(1, maxX - minX);
-    const wrapWidth = wrap.clientWidth || 900;
-    const offset = (wrapWidth / 2) - (minX + treeWidth / 2);
-    const final = new Map();
-    positions.forEach((p, id) => final.set(id, { x: p.x + offset, y: p.y }));
-    return final;
-  }
+    // Deep clone tree to save a snapshot of the state
+    function cloneTree(root) {
+        if (!root) return null;
+        let newNode = new TreeNode(root.val, root.id);
+        newNode.status = root.status;
+        newNode.left = cloneTree(root.left);
+        newNode.right = cloneTree(root.right);
+        return newNode;
+    }
 
-  // ---------------- Drawing helpers ----------------
-  function clearCanvas(){
-    canvas.innerHTML = '';
-    while(svg.firstChild) svg.removeChild(svg.firstChild);
-  }
-  function drawLine(x1,y1,x2,y2){
-    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-    line.setAttribute('x1', x1);
-    line.setAttribute('y1', y1);
-    line.setAttribute('x2', x2);
-    line.setAttribute('y2', y2);
-    line.setAttribute('stroke', '#6b7280');
-    line.setAttribute('stroke-width', '2');
-    line.setAttribute('stroke-linecap', 'round');
-    svg.appendChild(line);
-  }
+    // --- The Algorithm (Record Logic) ---
+    
+    function generateSnapshots(initialRoot) {
+        let history = [];
 
-  // ---------------- Render state: create DOM nodes and lines ----------------
-  // initiallyInvisible: Set of ids that should start invisible (used for post-swap fade-in)
-  function renderState(rootState, initiallyInvisible = new Set()){
-    const positions = computePositions(rootState);
-    clearCanvas();
-    const idToEl = new Map();
+        // Helper to save state
+        function save(msg, rootState) {
+            history.push({
+                tree: cloneTree(rootState),
+                message: msg
+            });
+        }
 
-    (function createEls(node){
-      if(!node) return;
-      const p = positions.get(node.id) || {x:0,y:0};
-      const el = document.createElement('div');
-      el.className = 'node-item';
-      el.style.left = p.x + 'px';
-      el.style.top = p.y + 'px';
-      el.dataset.id = node.id;
+        // Initial State
+        save("Initial State", initialRoot);
 
-      const bubble = document.createElement('div');
-      bubble.className = 'node-bubble';
-      if(initiallyInvisible.has(node.id)) bubble.classList.add('fading');
-      bubble.textContent = node.val;
-      el.appendChild(bubble);
+        // The Recursive Solution with Recording
+        function invertTree(node, rootReference) {
+            if (!node) return;
 
-      const lbl = document.createElement('div');
-      lbl.className = 'node-label';
-      lbl.textContent = ''; // optional
-      el.appendChild(lbl);
+            // 1. Visit
+            node.status = 'visiting';
+            save(`Visiting Node ${node.val}`, rootReference);
 
-      canvas.appendChild(el);
-      idToEl.set(node.id, el);
+            // 2. Recursion (Left then Right)
+            invertTree(node.left, rootReference);
+            invertTree(node.right, rootReference);
 
-      createEls(node.left);
-      createEls(node.right);
-    })(rootState);
+            // 3. The Swap Logic
+            node.status = 'swapping';
+            save(`Processing ${node.val}: Swapping children...`, rootReference);
+            
+            let temp = node.left;
+            node.left = node.right;
+            node.right = temp;
 
-    // draw lines after nodes created
-    positions.forEach((pos, id) => {
-      const node = findById(rootState, id);
-      if(!node) return;
-      if(node.left){
-        const cpos = positions.get(node.left.id);
-        if(cpos) drawLine(pos.x, pos.y, cpos.x, cpos.y);
-      }
-      if(node.right){
-        const cpos = positions.get(node.right.id);
-        if(cpos) drawLine(pos.x, pos.y, cpos.x, cpos.y);
-      }
+            node.status = 'done';
+            save(`Processed ${node.val}: Swap complete.`, rootReference);
+        }
+
+        // Run the simulation on a clone so we don't break the original immediately
+        let simulationRoot = cloneTree(initialRoot);
+        invertTree(simulationRoot, simulationRoot);
+        
+        // Final state
+        save("Inversion Complete", simulationRoot);
+        
+        return history;
+    }
+
+    // --- D3 Visualization ---
+
+    const svg = d3.select("#tree-container").append("svg")
+        .attr("width", width)
+        .attr("height", height)
+        .append("g")
+        .attr("transform", "translate(0, 40)"); // Padding top
+
+    const treeLayout = d3.tree().size([width, height - 100]);
+
+    function render(rootNode) {
+        if (!rootNode) {
+            svg.selectAll("*").remove();
+            return;
+        }
+
+        // Convert logical tree to D3 hierarchy
+        const hierarchy = d3.hierarchy(rootNode, d => {
+            let children = [];
+            if (d.left) children.push(d.left);
+            if (d.right) children.push(d.right);
+            // Important: If both are null, return null or empty. 
+            // If one is null, we usually want to visualize the empty slot or just skip.
+            // For tidy tree, simple children array is best.
+            return children;
+        });
+
+        const treeData = treeLayout(hierarchy);
+
+        // --- Links ---
+        const links = svg.selectAll(".link")
+            .data(treeData.links(), d => `${d.source.data.id}-${d.target.data.id}`);
+
+        links.enter().append("path")
+            .attr("class", "link")
+            .attr("d", d3.linkVertical()
+                .x(d => d.x)
+                .y(d => d.y)
+            )
+            .merge(links)
+            .transition().duration(duration)
+            .attr("d", d3.linkVertical()
+                .x(d => d.x)
+                .y(d => d.y)
+            );
+
+        links.exit().remove();
+
+        // --- Nodes ---
+        const nodes = svg.selectAll(".node")
+            .data(treeData.descendants(), d => d.data.id);
+
+        const nodesEnter = nodes.enter().append("g")
+            .attr("class", d => `node ${d.data.status}`)
+            .attr("transform", d => `translate(${d.x},${d.y})`);
+
+        nodesEnter.append("circle")
+            .attr("r", 20);
+
+        nodesEnter.append("text")
+            .attr("dy", "1px") // Center vertically
+            .text(d => d.data.val);
+
+        // Update
+        const nodesUpdate = nodesEnter.merge(nodes);
+        
+        nodesUpdate.transition().duration(duration)
+            .attr("transform", d => `translate(${d.x},${d.y})`)
+            .attr("class", d => `node ${d.data.status}`);
+
+        // Nodes Exit
+        nodes.exit().transition().duration(duration).remove();
+    }
+
+    // --- Controller Logic ---
+
+    function loadTestCase(index) {
+        // Stop any autoplay
+        stopAutoPlay();
+
+        const arr = testCases[index];
+        const root = arrayToTree(arr);
+        
+        // Generate the timeline of events
+        snapshots = generateSnapshots(root);
+        currentStepIndex = 0;
+        
+        updateUI();
+    }
+
+    function updateUI() {
+        const currentSnapshot = snapshots[currentStepIndex];
+        
+        // Update Text
+        d3.select("#status-text").text(currentSnapshot.message);
+        d3.select("#step-counter").text(`Step: ${currentStepIndex + 1}/${snapshots.length}`);
+
+        // Render Tree
+        render(currentSnapshot.tree);
+
+        // Update Buttons
+        document.getElementById("btn-prev").disabled = currentStepIndex === 0;
+        document.getElementById("btn-next").disabled = currentStepIndex === snapshots.length - 1;
+    }
+
+    function nextStep() {
+        if (currentStepIndex < snapshots.length - 1) {
+            currentStepIndex++;
+            updateUI();
+        } else {
+            stopAutoPlay();
+        }
+    }
+
+    function prevStep() {
+        if (currentStepIndex > 0) {
+            currentStepIndex--;
+            updateUI();
+        }
+    }
+
+    // Auto Play Logic
+    function toggleAutoPlay() {
+        const btn = document.getElementById("btn-play");
+        if (autoPlayInterval) {
+            stopAutoPlay();
+        } else {
+            btn.textContent = "Pause";
+            if (currentStepIndex === snapshots.length - 1) {
+                currentStepIndex = 0; // Restart if at end
+                updateUI();
+            }
+            autoPlayInterval = setInterval(nextStep, duration + 100);
+        }
+    }
+
+    function stopAutoPlay() {
+        if (autoPlayInterval) {
+            clearInterval(autoPlayInterval);
+            autoPlayInterval = null;
+            document.getElementById("btn-play").textContent = "Auto Play";
+        }
+    }
+
+    // --- Event Listeners ---
+
+    document.getElementById("test-case-select").addEventListener("change", (e) => {
+        loadTestCase(e.target.value);
     });
 
-    return { idToEl, positions, state: rootState };
-  }
+    document.getElementById("btn-next").addEventListener("click", () => {
+        stopAutoPlay();
+        nextStep();
+    });
 
-  // ---------------- Highlight and info ----------------
-  function applyHighlight(){
-    document.querySelectorAll('.node-bubble.current').forEach(el => el.classList.remove('current'));
-    const cur = steps[stepIndex];
-    if(cur){
-      const el = document.querySelector(`.node-item[data-id="${cur.id}"]`);
-      if(el){
-        const b = el.querySelector('.node-bubble');
-        if(b) b.classList.add('current');
-      }
-      infoEl.textContent = cur.action === 'visit'
-        ? `Visiting node ${cur.val} (id=${cur.id})`
-        : `Swap step: children of node ${cur.val} (id=${cur.id}) will be swapped`;
-    } else {
-      infoEl.textContent = 'Done';
-    }
-  }
+    document.getElementById("btn-prev").addEventListener("click", () => {
+        stopAutoPlay();
+        prevStep();
+    });
 
-  // ---------------- updateButtons ----------------
-  function updateButtons(){
-    prevBtn.disabled = stepIndex <= 0;
-    nextBtn.disabled = stepIndex >= steps.length - 1;
-  }
+    document.getElementById("btn-reset").addEventListener("click", () => {
+        stopAutoPlay();
+        currentStepIndex = 0;
+        updateUI();
+    });
 
-  // ---------------- Cross-fade swap animation ----------------
-  // caller should increment stepIndex BEFORE calling render for swap step.
-  function animateSwapCrossFade(step, prevIndex, done){
-    // PRE-swap: render tree at prevIndex
-    const preState = treeStateAt(prevIndex);
-    const pre = renderState(preState);
+    document.getElementById("btn-play").addEventListener("click", toggleAutoPlay);
 
-    // determine child ids in PRE state
-    const targetPre = findById(preState, step.id);
-    const leftId = targetPre && targetPre.left ? targetPre.left.id : null;
-    const rightId = targetPre && targetPre.right ? targetPre.right.id : null;
+    // Initialize
+    loadTestCase(0);
 
-    // fade out pre children if present
-    if(leftId && pre.idToEl.get(leftId)){
-      const b = pre.idToEl.get(leftId).querySelector('.node-bubble'); if(b) b.classList.add('fading');
-    }
-    if(rightId && pre.idToEl.get(rightId)){
-      const b = pre.idToEl.get(rightId).querySelector('.node-bubble'); if(b) b.classList.add('fading');
-    }
-
-    const fadeOutMs = 320;
-    setTimeout(() => {
-      // POST-swap: render tree at current stepIndex (swap already applied in treeStateAt because caller advanced stepIndex)
-      const postState = treeStateAt(stepIndex);
-      // make swapped child ids initially invisible so we can fade them in
-      const initiallyInvisible = new Set();
-      if(leftId) initiallyInvisible.add(leftId);
-      if(rightId) initiallyInvisible.add(rightId);
-
-      const post = renderState(postState, initiallyInvisible);
-
-      // fade-in those child bubbles
-      initiallyInvisible.forEach(id => {
-        const dom = post.idToEl.get(id);
-        if(dom){
-          const b = dom.querySelector('.node-bubble');
-          if(b){
-            b.style.opacity = '0';
-            b.style.transition = 'opacity .34s ease';
-            setTimeout(()=> b.style.opacity = '1', 12);
-            // cleanup after animation
-            setTimeout(()=> { b.style.transition = ''; b.style.opacity = ''; }, 420);
-          }
-        }
-      });
-
-      // finalize after fade-in
-      setTimeout(() => {
-        applyHighlight();
-        updateButtons();
-        done && done();
-      }, 460);
-    }, fadeOutMs);
-  }
-
-  // ---------------- Main render driver ----------------
-  function render(){
-    if(steps.length === 0) return;
-    const s = steps[stepIndex];
-    if(!s) return;
-
-    if(s.action === 'visit'){
-      const state = treeStateAt(stepIndex);
-      renderState(state);
-      applyHighlight();
-      updateButtons();
-      return;
-    }
-
-    if(s.action === 'swap'){
-      // animate: caller must have incremented stepIndex before calling render for swap
-      const prevIndex = Math.max(0, stepIndex - 1);
-      animateSwapCrossFade(s, prevIndex, () => {
-        updateButtons();
-      });
-      updateButtons();
-      return;
-    }
-  }
-
-  // ---------------- Controls ----------------
-  function doNext(){
-    if(stepIndex >= steps.length - 1) return;
-    stepIndex++;
-    render();
-  }
-  function doPrev(){
-    if(stepIndex <= 0) return;
-    stepIndex--;
-    render();
-  }
-  function runToEnd(){
-    function stepForward(){
-      if(stepIndex < steps.length - 1){
-        stepIndex++;
-        render();
-        setTimeout(stepForward, 520);
-      }
-    }
-    stepForward();
-  }
-  function doReset(){
-    stepIndex = 0;
-    render();
-  }
-
-  nextBtn.addEventListener('click', doNext);
-  prevBtn.addEventListener('click', doPrev);
-  runBtn.addEventListener('click', runToEnd);
-  resetBtn.addEventListener('click', doReset);
-
-  // initial render
-  render();
-
-  // redraw on resize
-  let resizeTimer = null;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => { render(); }, 120);
-  });
-})();
 </script>
 </body>
 </html>
