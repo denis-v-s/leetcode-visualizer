@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeetCode 100: Same Tree</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --node-fill: #ffffff;
+            --node-stroke: #333;
+            --node-visiting: #fbbf24;    /* Yellow: Currently comparing */
+            --node-match: #10b981;      /* Green: Values match, continue */
+            --node-mismatch: #ef4444;   /* Red: Value mismatch or one is null/one is not */
+            --node-null-match: #3b82f6; /* Blue: Both are Null (base case True) */
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 { margin-bottom: 5px; color: #333; }
+        h3 { margin-top: 0; color: #666; font-weight: 400; font-size: 1rem; margin-bottom: 20px;}
+        
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 8px 16px;
+            cursor: pointer;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        button:hover { background-color: #555; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+
+        /* Visualization Area: Increased overall width for more space */
+        #tree-pair-container {
+            display: flex;
+            gap: 20px;
+            width: 840px; 
+            height: 400px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            overflow: hidden;
+            padding: 10px 0;
+        }
+        
+        .tree-container {
+            width: 50%;
+            height: 100%;
+        }
+
+        /* Status Bar */
+        #status-bar {
+            margin-top: 15px;
+            font-family: 'Courier New', Courier, monospace;
+            background: #2d3748;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 800px; 
+            min-height: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* D3 Styles */
+        .node circle {
+            fill: var(--node-fill);
+            stroke: var(--node-stroke);
+            stroke-width: 2px;
+            transition: fill 0.3s, stroke 0.3s;
+        }
+
+        .node text.val {
+            font: 14px sans-serif;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            pointer-events: none;
+            font-weight: bold;
+        }
+
+        .link {
+            fill: none;
+            stroke: #ccc;
+            stroke-width: 2px;
+        }
+
+        /* States */
+        .node.visiting circle { fill: var(--node-visiting); stroke: #d97706; }
+        .node.match circle { fill: var(--node-match); stroke: #047857; }
+        .node.mismatch circle { fill: var(--node-mismatch); stroke: #b91c1c; }
+        .node.null-match circle { fill: var(--node-null-match); stroke: #2563eb; }
+
+    </style>
+</head>
+<body>
+
+    <h1>LeetCode 100: Same Tree (isSameTree)</h1>
+    <h3>Recursive DFS Comparison</h3>
+
+    <div class="controls">
+        <label>Test Case:</label>
+        <select id="test-case-select">
+            <option value="0">True: [1,2,3] vs [1,2,3]</option>
+            <option value="1">False (Structure): [1,2] vs [1,null,2]</option>
+            <option value="2">False (Value): [1,2,1] vs [1,1,2]</option>
+            <option value="3">True: Complex [1,2,3,4,null,5,6] vs [1,2,3,4,null,5,6]</option>
+        </select>
+        
+        <div style="width: 20px;"></div>
+
+        <button id="btn-prev">Prev</button>
+        <button id="btn-play">Auto Play</button>
+        <button id="btn-next">Next</button>
+        <button id="btn-reset">Reset</button>
+    </div>
+
+    <div id="tree-pair-container">
+        <div class="tree-container">
+            <h4 style="text-align: center;">Tree P</h4>
+            <svg id="svg-p" width="420" height="350"></svg>
+        </div>
+        <div class="tree-container">
+            <h4 style="text-align: center;">Tree Q</h4>
+            <svg id="svg-q" width="420" height="350"></svg>
+        </div>
+    </div>
+
+    <div id="status-bar">
+        <span id="status-text">Ready</span>
+        <span id="step-counter">Step: 0/0</span>
+    </div>
+
+<script>
+    // --- Configuration ---
+    const width = 420; // SVG width (per tree)
+    const height = 350;
+    const duration = 600; 
+    
+    // --- State Management ---
+    let snapshots = [];
+    let currentStepIndex = 0;
+    let autoPlayInterval = null;
+
+    // Test cases (p, q)
+    const testCases = [
+        [[1,2,3], [1,2,3]],
+        [[1,2], [1,null,2]],
+        [[1,2,1], [1,1,2]],
+        [[1,2,3,4,null,5,6], [1,2,3,4,null,5,6]]
+    ];
+
+    // --- Tree Logic ---
+    
+    class TreeNode {
+        constructor(val, id, treeName, isNull = false) {
+            this.val = val;
+            this.id = `${treeName}-${id}`; 
+            this.rawId = id; // Original index for mapping
+            this.treeName = treeName;
+            this.left = null;
+            this.right = null;
+            this.status = 'idle';
+            this.isNull = isNull; // Flag to indicate a structural placeholder (node exists in array but is null)
+        }
+    }
+
+    // Function now creates placeholder nodes for nulls to preserve array structure indexing
+    // for correct D3 layout and comparison logic.
+    function arrayToTree(arr, treeName) {
+        if (!arr || arr.length === 0) return null;
+        
+        // 1. Create all nodes/placeholders
+        let nodes = arr.map((val, index) => 
+            val !== null 
+                ? new TreeNode(val, index, treeName) 
+                : new TreeNode(null, index, treeName, true) // Create placeholder node
+        );
+        
+        let root = nodes[0];
+        if (root.isNull) return null; 
+
+        let queue = [root];
+        let i = 1;
+
+        while (i < arr.length && queue.length > 0) {
+            let current = queue.shift();
+            
+            // Only non-null nodes can have children relationships, but we process indices.
+            if (!current.isNull) {
+                
+                // Left Child (2i + 1)
+                if (i < arr.length) {
+                    current.left = nodes[i];
+                    queue.push(nodes[i]);
+                }
+                i++;
+                
+                // Right Child (2i + 2)
+                if (i < arr.length) {
+                    current.right = nodes[i];
+                    queue.push(nodes[i]);
+                }
+                i++;
+            }
+        }
+        return root;
+    }
+
+    function cloneTree(root) {
+        if (!root) return null;
+        // Ensure the isNull property is cloned
+        let newNode = new TreeNode(root.val, root.rawId, root.treeName, root.isNull); 
+        newNode.status = root.status;
+        newNode.left = cloneTree(root.left);
+        newNode.right = cloneTree(root.right);
+        return newNode;
+    }
+
+    // --- The Algorithm (Record Logic) ---
+    
+    function generateSnapshots(initialP, initialQ) {
+        let history = [];
+        let finalResult = false;
+
+        function save(msg, pState, qState) {
+            history.push({
+                pTree: cloneTree(pState),
+                qTree: cloneTree(qState),
+                message: msg,
+                result: finalResult
+            });
+        }
+
+        // Helper to update specific node in the clone
+        function findNode(root, rawId) {
+            if (!root) return null;
+            if (root.rawId === rawId) return root;
+            return findNode(root.left, rawId) || findNode(root.right, rawId);
+        }
+
+        let simP = cloneTree(initialP);
+        let simQ = cloneTree(initialQ);
+        
+        save("Initial State: Starting comparison from roots.", simP, simQ);
+
+        // Synchronized DFS
+        // pId/qId can be null if the parent's child pointer was null (array ended)
+        function dfs(pId, qId) {
+            
+            // 1. Base Case 1: Both IDs are null (virtual end of tree, e.g., both node 2's right children)
+            if (pId === null && qId === null) {
+                save(`Base Case: Both are NULL pointers (virtual end of tree). Returning True.`, simP, simQ);
+                return true;
+            }
+            
+            // Get nodes (will return null if ID is null)
+            let p = pId !== null ? findNode(simP, pId) : null;
+            let q = qId !== null ? findNode(simQ, qId) : null;
+
+            // 2. Base Case 2: One ID is null, one is not (structure mismatch)
+            // This handles cases where an array is shorter than the other for a given branch.
+            if (p === null || q === null) {
+                // We must mark the existing node (which is non-null) as a mismatch
+                if (p && !p.isNull) p.status = 'mismatch';
+                if (q && !q.isNull) q.status = 'mismatch';
+                
+                const pVal = p ? (p.isNull ? 'NULL' : p.val) : 'NULL';
+                const qVal = q ? (q.isNull ? 'NULL' : q.val) : 'NULL';
+                save(`Base Case: Structure Mismatch (${pVal} vs ${qVal}). Returning False.`, simP, simQ);
+                return false;
+            }
+
+            // Now p and q are guaranteed to be non-null TreeNode objects (real or placeholder).
+            
+            // 3. Check placeholder mismatch (e.g., [1,2] vs [1,null,2] at left child)
+            if (p.isNull && q.isNull) {
+                save(`Base Case: Both are NULL (placeholders). Returning True.`, simP, simQ);
+                return true;
+            }
+
+            // 4. Check structure mismatch (one placeholder, one real node)
+            if (p.isNull !== q.isNull) {
+                if (!p.isNull) p.status = 'mismatch';
+                if (!q.isNull) q.status = 'mismatch';
+                save(`Base Case: Structural Mismatch (${p.isNull ? 'NULL' : p.val} vs ${q.isNull ? 'NULL' : q.val}). Returning False.`, simP, simQ);
+                return false;
+            }
+            
+            // Now both are guaranteed to be real, non-placeholder nodes.
+
+            // 5. Value Mismatch
+            if (p.val !== q.val) {
+                p.status = 'mismatch';
+                q.status = 'mismatch';
+                save(`Value Mismatch: ${p.val} != ${q.val}. Returning False.`, simP, simQ);
+                return false;
+            }
+            
+            // 6. Recursive Step: Values match
+            p.status = 'match';
+            q.status = 'match';
+            save(`Value Match: ${p.val} == ${q.val}. Recursing Left.`, simP, simQ);
+
+            // Safely get child IDs or null if pointer is null (array boundary reached)
+            let pLeftId = p.left ? p.left.rawId : null;
+            let qLeftId = q.left ? q.left.rawId : null;
+            
+            let leftResult = dfs(pLeftId, qLeftId);
+
+            if (!leftResult) {
+                save(`Left side returned False. Short circuiting Right and returning False.`, simP, simQ);
+                return false;
+            }
+
+            // Recurse Right
+            p = findNode(simP, pId); // Refresh refs
+            q = findNode(simQ, qId);
+            
+            // Reset status before checking right
+            if (p && !p.isNull) p.status = 'visiting';
+            if (q && !q.isNull) q.status = 'visiting';
+            save(`Left side returned True. Recursing Right.`, simP, simQ);
+
+            let pRightId = p.right ? p.right.rawId : null;
+            let qRightId = q.right ? q.right.rawId : null;
+
+            let rightResult = dfs(pRightId, qRightId);
+
+            // Final result for this pair (resetting the node to idle after returning)
+            if (p && !p.isNull) p.status = 'idle';
+            if (q && !q.isNull) q.status = 'idle';
+
+            return rightResult;
+        }
+
+        // Start DFS from roots (root node index is 0)
+        finalResult = dfs(0, 0);
+
+        save(`Comparison finished. Result: ${finalResult ? 'True' : 'False'}`, simP, simQ);
+        
+        return history;
+    }
+
+    // --- D3 Visualization ---
+
+    // Using nodeSize only and removing the fixed size definition allows the tree to grow dynamically.
+    const treeLayout = d3.tree().nodeSize([35, 50]); 
+
+    // Translate the group horizontally by half the SVG width to center the root node (which D3 places at x=0).
+    const svgP = d3.select("#svg-p").append("g")
+        .attr("transform", `translate(${width / 2}, 20)`);
+        
+    const svgQ = d3.select("#svg-q").append("g")
+        .attr("transform", `translate(${width / 2}, 20)`);
+
+    function renderTree(svgElement, rootNode) {
+        // Clear the SVG on every render
+        svgElement.selectAll("g > *").remove(); 
+        if (!rootNode) return;
+
+        // Use the placeholder nodes for hierarchy calculation
+        const hierarchy = d3.hierarchy(rootNode, d => {
+            let children = [];
+            if (d.left) children.push(d.left);
+            if (d.right) children.push(d.right);
+            return children;
+        });
+
+        const treeData = treeLayout(hierarchy);
+
+        // Links
+        const links = svgElement.selectAll(".link")
+            .data(treeData.links(), d => `${d.source.data.id}-${d.target.data.id}`);
+
+        links.enter().append("path")
+            .attr("class", "link")
+            .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y));
+
+        links.exit().remove();
+
+        // Nodes
+        const nodes = svgElement.selectAll(".node")
+            .data(treeData.descendants(), d => d.data.id);
+
+        const nodesEnter = nodes.enter().append("g")
+            .attr("class", d => `node ${d.data.status}`)
+            .attr("transform", d => `translate(${d.x},${d.y})`);
+
+        // Circle - Apply opacity based on isNull to hide placeholder nodes
+        nodesEnter.append("circle")
+            .attr("r", 15)
+            .style("opacity", d => d.data.isNull ? 0 : 1); 
+
+        // Value Text - Apply opacity based on isNull
+        nodesEnter.append("text")
+            .attr("class", "val")
+            .attr("dy", "1px")
+            .text(d => d.data.val)
+            .style("opacity", d => d.data.isNull ? 0 : 1); 
+
+        // Update
+        const nodesUpdate = nodesEnter.merge(nodes);
+        
+        nodesUpdate.transition().duration(duration/2)
+            .attr("transform", d => `translate(${d.x},${d.y})`)
+            .attr("class", d => `node ${d.data.status}`);
+            
+        // Transition update for opacity and text for existing nodes
+        nodesUpdate.select('circle')
+            .transition().duration(duration/2)
+            .style("opacity", d => d.data.isNull ? 0 : 1);
+
+        nodesUpdate.select('text')
+            .transition().duration(duration/2)
+            .style("opacity", d => d.data.isNull ? 0 : 1);
+
+
+        nodes.exit().remove();
+    }
+
+    // --- Controller Logic ---
+
+    function loadTestCase(index) {
+        stopAutoPlay();
+        const [arrP, arrQ] = testCases[index];
+        // Now using arrayToTree that includes placeholder nodes
+        const rootP = arrayToTree(arrP, 'P');
+        const rootQ = arrayToTree(arrQ, 'Q');
+        snapshots = generateSnapshots(rootP, rootQ);
+        currentStepIndex = 0;
+        updateUI();
+    }
+
+    function updateUI() {
+        if (!snapshots[currentStepIndex]) return;
+        const s = snapshots[currentStepIndex];
+        
+        d3.select("#status-text").text(s.message);
+        d3.select("#step-counter").text(`Step: ${currentStepIndex + 1}/${snapshots.length}`);
+        
+        renderTree(svgP, s.pTree);
+        renderTree(svgQ, s.qTree);
+
+        document.getElementById("btn-prev").disabled = currentStepIndex === 0;
+        document.getElementById("btn-next").disabled = currentStepIndex === snapshots.length - 1;
+        
+        // Final result styling
+        if (currentStepIndex === snapshots.length - 1) {
+            const resultColor = s.result ? '#10b981' : '#ef4444';
+            d3.select("#status-bar").style('background-color', resultColor);
+        } else {
+            d3.select("#status-bar").style('background-color', '#2d3748');
+        }
+    }
+
+    function nextStep() {
+        if (currentStepIndex < snapshots.length - 1) {
+            currentStepIndex++;
+            updateUI();
+        } else {
+            stopAutoPlay();
+        }
+    }
+
+    function prevStep() {
+        if (currentStepIndex > 0) {
+            currentStepIndex--;
+            updateUI();
+        }
+    }
+
+    function toggleAutoPlay() {
+        if (autoPlayInterval) {
+            stopAutoPlay();
+        } else {
+            document.getElementById("btn-play").textContent = "Pause";
+            if (currentStepIndex === snapshots.length - 1) {
+                currentStepIndex = 0;
+                updateUI();
+            }
+            autoPlayInterval = setInterval(nextStep, duration + 200);
+        }
+    }
+
+    function stopAutoPlay() {
+        clearInterval(autoPlayInterval);
+        autoPlayInterval = null;
+        document.getElementById("btn-play").textContent = "Auto Play";
+    }
+
+    // Listeners
+    document.getElementById("test-case-select").addEventListener("change", (e) => loadTestCase(e.target.value));
+    document.getElementById("btn-next").addEventListener("click", () => { stopAutoPlay(); nextStep(); });
+    document.getElementById("btn-prev").addEventListener("click", () => { stopAutoPlay(); prevStep(); });
+    document.getElementById("btn-reset").addEventListener("click", () => { stopAutoPlay(); currentStepIndex = 0; updateUI(); });
+    document.getElementById("btn-play").addEventListener("click", toggleAutoPlay);
+
+    // Init
+    loadTestCase(0);
+
+</script>
+</body>
+</html>
