@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeetCode 543: Diameter of Binary Tree</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --node-fill: #ffffff;
+            --node-stroke: #333;
+            --node-visiting: #fbbf24; /* Yellow */
+            --node-calc: #3b82f6;     /* Blue */
+            --node-new-max: #10b981;  /* Green */
+            --text-sub: #666;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 { margin-bottom: 5px; color: #333; }
+        h3 { margin-top: 0; color: #666; font-weight: 400; font-size: 1rem; margin-bottom: 20px;}
+        
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 8px 16px;
+            cursor: pointer;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        button:hover { background-color: #555; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+
+        /* Dashboard */
+        .dashboard {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .metric-box {
+            background: #fff;
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            text-align: center;
+        }
+        .metric-label { font-size: 12px; color: #777; text-transform: uppercase; letter-spacing: 1px;}
+        .metric-val { font-size: 24px; font-weight: bold; color: #333; }
+        .metric-val.highlight { color: #10b981; animation: pop 0.3s ease; }
+
+        @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
+
+        /* Visualization Area */
+        #tree-container {
+            width: 100%;
+            max-width: 800px;
+            height: 500px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Status Bar */
+        #status-bar {
+            margin-top: 15px;
+            font-family: 'Courier New', Courier, monospace;
+            background: #2d3748;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 760px;
+            min-height: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* D3 Styles */
+        .node circle {
+            fill: var(--node-fill);
+            stroke: var(--node-stroke);
+            stroke-width: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .node text.val {
+            font: 14px sans-serif;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            pointer-events: none;
+            font-weight: bold;
+        }
+
+        .node text.stat-label {
+            font: 10px sans-serif;
+            fill: var(--text-sub);
+            text-anchor: middle;
+        }
+
+        .link {
+            fill: none;
+            stroke: #ccc;
+            stroke-width: 2px;
+        }
+
+        /* States */
+        .node.visiting circle { fill: var(--node-visiting); stroke: #d97706; }
+        .node.calculating circle { fill: var(--node-calc); stroke: #2563eb; }
+        .node.new-max circle { fill: var(--node-new-max); stroke: #047857; stroke-width: 3px; }
+
+    </style>
+</head>
+<body>
+
+    <h1>LeetCode 543: Diameter of Binary Tree</h1>
+    <h3>Post-Order Traversal: Updating Global Max</h3>
+
+    <div class="controls">
+        <label>Test Case:</label>
+        <select id="test-case-select">
+            <option value="0">Standard: [1,2,3,4,5]</option>
+            <option value="1">Small: [1,2]</option>
+            <option value="2">Skewed Left: [1,2,null,3,null,4,null]</option>
+            <option value="3">Long Path not thru Root: [1,2,3,4,5,null,null,6,null,7,null,8]</option>
+        </select>
+        
+        <div style="width: 20px;"></div>
+
+        <button id="btn-prev">Prev</button>
+        <button id="btn-play">Auto Play</button>
+        <button id="btn-next">Next</button>
+        <button id="btn-reset">Reset</button>
+    </div>
+
+    <div class="dashboard">
+        <div class="metric-box">
+            <div class="metric-label">Global Ans</div>
+            <div id="global-ans" class="metric-val">0</div>
+        </div>
+    </div>
+
+    <div id="tree-container"></div>
+
+    <div id="status-bar">
+        <span id="status-text">Ready</span>
+        <span id="step-counter">Step: 0/0</span>
+    </div>
+
+<script>
+    // --- Configuration ---
+    const width = 800;
+    const height = 500;
+    const duration = 600; 
+
+    // --- State Management ---
+    let snapshots = [];
+    let currentStepIndex = 0;
+    let autoPlayInterval = null;
+
+    // Test cases
+    const testCases = [
+        [1,2,3,4,5], // Standard
+        [1,2],       // Small
+        [1,2,null,3,null,4,null], // Skewed
+        [1,2,3,4,5,null,null,6,null,7,null,8] // Path not through root (Answer 4, via node 2)
+    ];
+
+    // --- Tree Logic ---
+    class TreeNode {
+        constructor(val, id) {
+            this.val = val;
+            this.id = id; 
+            this.left = null;
+            this.right = null;
+            this.status = 'idle'; // idle, visiting, calculating, new-max
+            
+            // Visualization stats
+            this.leftH = "?";
+            this.rightH = "?";
+            this.localDiameter = null; 
+        }
+    }
+
+    function arrayToTree(arr) {
+        if (!arr || arr.length === 0) return null;
+        let nodes = arr.map((val, index) => val !== null ? new TreeNode(val, index) : null);
+        let root = nodes[0];
+        let queue = [root];
+        let i = 1;
+
+        while (i < arr.length) {
+            let current = queue.shift();
+            if (i < arr.length && nodes[i]) {
+                current.left = nodes[i];
+                queue.push(nodes[i]);
+            }
+            i++;
+            if (i < arr.length && nodes[i]) {
+                current.right = nodes[i];
+                queue.push(nodes[i]);
+            }
+            i++;
+        }
+        return root;
+    }
+
+    function cloneTree(root) {
+        if (!root) return null;
+        let newNode = new TreeNode(root.val, root.id);
+        newNode.status = root.status;
+        newNode.leftH = root.leftH;
+        newNode.rightH = root.rightH;
+        newNode.localDiameter = root.localDiameter;
+        newNode.left = cloneTree(root.left);
+        newNode.right = cloneTree(root.right);
+        return newNode;
+    }
+
+    // --- The Algorithm (Record Logic) ---
+    function generateSnapshots(initialRoot) {
+        let history = [];
+        let globalAns = 0; // The 'ans' variable in your Python code
+
+        function save(msg, rootState, highlightAns = false) {
+            history.push({
+                tree: cloneTree(rootState),
+                message: msg,
+                ans: globalAns,
+                highlightAns: highlightAns
+            });
+        }
+
+        // Helper to update specific node in the clone
+        function findNode(root, id) {
+            if (!root) return null;
+            if (root.id === id) return root;
+            return findNode(root.left, id) || findNode(root.right, id);
+        }
+
+        let simulationRoot = cloneTree(initialRoot);
+        save("Initial State", simulationRoot);
+
+        // -- The Solution Logic --
+        function helper(nodeId) {
+            let node = findNode(simulationRoot, nodeId);
+            if (!node) return 0;
+
+            // 1. Visit
+            node.status = 'visiting';
+            save(`Visiting Node ${node.val}`, simulationRoot);
+
+            // 2. Left Recursion
+            let leftId = node.left ? node.left.id : null;
+            let leftHeight = helper(leftId);
+            
+            // Refresh node ref
+            node = findNode(simulationRoot, nodeId); 
+            node.leftH = leftHeight; // Update UI for left return
+
+            // 3. Right Recursion
+            let rightId = node.right ? node.right.id : null;
+            let rightHeight = helper(rightId);
+            
+            // Refresh node ref
+            node = findNode(simulationRoot, nodeId);
+            node.rightH = rightHeight; // Update UI for right return
+
+            // 4. Calculate Diameter Logic
+            node.status = 'calculating';
+            let currentPath = leftHeight + rightHeight;
+            node.localDiameter = currentPath;
+            
+            let msg = `At Node ${node.val}: Left(${leftHeight}) + Right(${rightHeight}) = ${currentPath}`;
+            let highlight = false;
+
+            if (currentPath > globalAns) {
+                globalAns = currentPath;
+                node.status = 'new-max'; // Green highlight
+                msg += `. New Max Found!`;
+                highlight = true;
+            } else {
+                msg += `. Not greater than max (${globalAns}).`;
+            }
+
+            save(msg, simulationRoot, highlight);
+
+            // 5. Return height
+            // Reset status briefly to show we are moving up
+            if (node.status === 'new-max') node.status = 'idle'; // clear highlight
+            
+            let returnHeight = Math.max(leftHeight, rightHeight) + 1;
+            return returnHeight;
+        }
+
+        helper(simulationRoot ? simulationRoot.id : null);
+        save("Traversal Complete. Final Diameter: " + globalAns, simulationRoot);
+        
+        return history;
+    }
+
+    // --- D3 Visualization ---
+
+    const svg = d3.select("#tree-container").append("svg")
+        .attr("width", width)
+        .attr("height", height)
+        .append("g")
+        .attr("transform", "translate(0, 40)");
+
+    const treeLayout = d3.tree().size([width, height - 100]);
+
+    function render(rootNode) {
+        if (!rootNode) {
+            svg.selectAll("*").remove();
+            return;
+        }
+
+        // Fix: Explicitly define children for hierarchy
+        const hierarchy = d3.hierarchy(rootNode, d => {
+            let children = [];
+            if (d.left) children.push(d.left);
+            if (d.right) children.push(d.right);
+            return children;
+        });
+
+        const treeData = treeLayout(hierarchy);
+
+        // Links
+        const links = svg.selectAll(".link")
+            .data(treeData.links(), d => `${d.source.data.id}-${d.target.data.id}`);
+
+        links.enter().append("path")
+            .attr("class", "link")
+            .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y))
+            .merge(links)
+            .transition().duration(duration/2)
+            .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y));
+
+        links.exit().remove();
+
+        // Nodes
+        const nodes = svg.selectAll(".node")
+            .data(treeData.descendants(), d => d.data.id);
+
+        const nodesEnter = nodes.enter().append("g")
+            .attr("class", d => `node ${d.data.status}`)
+            .attr("transform", d => `translate(${d.x},${d.y})`);
+
+        // Circle
+        nodesEnter.append("circle").attr("r", 20);
+
+        // Value Text
+        nodesEnter.append("text")
+            .attr("class", "val")
+            .attr("dy", "1px")
+            .text(d => d.data.val);
+
+        // Stats Text (L and R values)
+        // Left Height Label
+        nodesEnter.append("text")
+            .attr("class", "stat-label")
+            .attr("x", -28)
+            .attr("y", 5)
+            .text(d => `L:${d.data.leftH}`);
+            
+        // Right Height Label
+        nodesEnter.append("text")
+            .attr("class", "stat-label")
+            .attr("x", 28)
+            .attr("y", 5)
+            .text(d => `R:${d.data.rightH}`);
+
+        // Update Phase
+        const nodesUpdate = nodesEnter.merge(nodes);
+        
+        nodesUpdate.transition().duration(duration/2)
+            .attr("transform", d => `translate(${d.x},${d.y})`)
+            .attr("class", d => `node ${d.data.status}`);
+        
+        // Update stats text
+        nodesUpdate.selectAll(".stat-label")
+             .text((d, i, n) => {
+                 // n[0] is Left text, n[1] is Right text based on append order
+                 // But cleaner to select by index or re-select
+                 // Simple approach: re-select based on index doesn't work easily in merge
+                 // Let's just re-set text based on x attr which we know
+                 let xVal = d3.select(n[i]).attr("x");
+                 if (xVal < 0) return `L:${d.data.leftH}`;
+                 return `R:${d.data.rightH}`;
+             });
+
+        nodes.exit().remove();
+    }
+
+    // --- Controller Logic ---
+
+    function loadTestCase(index) {
+        stopAutoPlay();
+        const arr = testCases[index];
+        const root = arrayToTree(arr);
+        snapshots = generateSnapshots(root);
+        currentStepIndex = 0;
+        updateUI();
+    }
+
+    function updateUI() {
+        if (!snapshots[currentStepIndex]) return;
+        const s = snapshots[currentStepIndex];
+        
+        // Update Text
+        d3.select("#status-text").text(s.message);
+        d3.select("#step-counter").text(`Step: ${currentStepIndex + 1}/${snapshots.length}`);
+        
+        // Update Dashboard
+        const ansEl = document.getElementById("global-ans");
+        ansEl.innerText = s.ans;
+        if (s.highlightAns) {
+            ansEl.classList.add("highlight");
+            setTimeout(() => ansEl.classList.remove("highlight"), 300);
+        }
+
+        render(s.tree);
+
+        document.getElementById("btn-prev").disabled = currentStepIndex === 0;
+        document.getElementById("btn-next").disabled = currentStepIndex === snapshots.length - 1;
+    }
+
+    function nextStep() {
+        if (currentStepIndex < snapshots.length - 1) {
+            currentStepIndex++;
+            updateUI();
+        } else {
+            stopAutoPlay();
+        }
+    }
+
+    function prevStep() {
+        if (currentStepIndex > 0) {
+            currentStepIndex--;
+            updateUI();
+        }
+    }
+
+    function toggleAutoPlay() {
+        if (autoPlayInterval) {
+            stopAutoPlay();
+        } else {
+            document.getElementById("btn-play").textContent = "Pause";
+            if (currentStepIndex === snapshots.length - 1) {
+                currentStepIndex = 0;
+                updateUI();
+            }
+            autoPlayInterval = setInterval(nextStep, duration + 200);
+        }
+    }
+
+    function stopAutoPlay() {
+        clearInterval(autoPlayInterval);
+        autoPlayInterval = null;
+        document.getElementById("btn-play").textContent = "Auto Play";
+    }
+
+    // Listeners
+    document.getElementById("test-case-select").addEventListener("change", (e) => loadTestCase(e.target.value));
+    document.getElementById("btn-next").addEventListener("click", () => { stopAutoPlay(); nextStep(); });
+    document.getElementById("btn-prev").addEventListener("click", () => { stopAutoPlay(); prevStep(); });
+    document.getElementById("btn-reset").addEventListener("click", () => { stopAutoPlay(); currentStepIndex = 0; updateUI(); });
+    document.getElementById("btn-play").addEventListener("click", toggleAutoPlay);
+
+    // Init
+    loadTestCase(0);
+
+</script>
+</body>
+</html>
