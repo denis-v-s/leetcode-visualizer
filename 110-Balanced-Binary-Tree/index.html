@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeetCode 110: Balanced Binary Tree</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --node-fill: #ffffff;
+            --node-stroke: #333;
+            --node-visiting: #fbbf24; /* Yellow */
+            --node-checking: #3b82f6; /* Blue */
+            --node-balanced: #10b981; /* Green */
+            --node-error: #ef4444;    /* Red */
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 { margin-bottom: 5px; color: #333; }
+        h3 { margin-top: 0; color: #666; font-weight: 400; font-size: 1rem; margin-bottom: 20px;}
+        
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 8px 16px;
+            cursor: pointer;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        button:hover { background-color: #555; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+
+        /* Visualization Area */
+        #tree-container {
+            width: 100%;
+            max-width: 800px;
+            height: 500px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Status Bar */
+        #status-bar {
+            margin-top: 15px;
+            font-family: 'Courier New', Courier, monospace;
+            background: #2d3748;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 760px;
+            min-height: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* D3 Styles */
+        .node circle {
+            fill: var(--node-fill);
+            stroke: var(--node-stroke);
+            stroke-width: 2px;
+            transition: fill 0.3s, stroke 0.3s;
+        }
+
+        .node text.val {
+            font: 14px sans-serif;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            pointer-events: none;
+            font-weight: bold;
+        }
+
+        /* Height Badge */
+        .node text.height-label {
+            font: 10px sans-serif;
+            fill: #555;
+            text-anchor: middle;
+        }
+
+        .link {
+            fill: none;
+            stroke: #ccc;
+            stroke-width: 2px;
+        }
+
+        /* States */
+        .node.visiting circle { fill: var(--node-visiting); stroke: #d97706; }
+        .node.checking circle { fill: var(--node-checking); stroke: #2563eb; }
+        .node.balanced circle { fill: var(--node-balanced); stroke: #059669; }
+        .node.error circle { fill: var(--node-error); stroke: #b91c1c; } /* Imbalanced or Short Circuit */
+
+    </style>
+</head>
+<body>
+
+    <h1>LeetCode 110: Balanced Binary Tree</h1>
+    <h3>Depth First Search: Calculating Heights & Short Circuiting</h3>
+
+    <div class="controls">
+        <label>Test Case:</label>
+        <select id="test-case-select">
+            <option value="0">Balanced: [3,9,20,null,null,15,7]</option>
+            <option value="1">Unbalanced: [1,2,2,3,3,null,null,4,4]</option>
+            <option value="2">Short Circuit Right: [1,2,2,3,null,null,3,4,null,null,4]</option>
+            <option value="3">Small Balanced: [1,2,3]</option>
+        </select>
+        
+        <div style="width: 20px;"></div>
+
+        <button id="btn-prev">Prev</button>
+        <button id="btn-play">Auto Play</button>
+        <button id="btn-next">Next</button>
+        <button id="btn-reset">Reset</button>
+    </div>
+
+    <div id="tree-container"></div>
+
+    <div id="status-bar">
+        <span id="status-text">Ready</span>
+        <span id="step-counter">Step: 0/0</span>
+    </div>
+
+<script>
+    // --- Configuration ---
+    const width = 800;
+    const height = 500;
+    const duration = 600; 
+
+    // --- State Management ---
+    let snapshots = [];
+    let currentStepIndex = 0;
+    let autoPlayInterval = null;
+
+    // Test cases
+    const testCases = [
+        [3,9,20,null,null,15,7], // Balanced
+        [1,2,2,3,3,null,null,4,4], // Unbalanced
+        [1,2,2,3,null,null,3,4,null,null,4], // Unbalanced Deep
+        [1,2,3] // Small Balanced
+    ];
+
+    // --- Tree Logic ---
+    
+    class TreeNode {
+        constructor(val, id) {
+            this.val = val;
+            this.id = id; 
+            this.left = null;
+            this.right = null;
+            this.status = 'idle'; // idle, visiting, checking, balanced, error
+            this.heightVal = null; // To display the calculated height
+        }
+    }
+
+    function arrayToTree(arr) {
+        if (!arr || arr.length === 0) return null;
+        let nodes = arr.map((val, index) => val !== null ? new TreeNode(val, index) : null);
+        let root = nodes[0];
+        let queue = [root];
+        let i = 1;
+
+        while (i < arr.length) {
+            let current = queue.shift();
+            if (i < arr.length && nodes[i]) {
+                current.left = nodes[i];
+                queue.push(nodes[i]);
+            }
+            i++;
+            if (i < arr.length && nodes[i]) {
+                current.right = nodes[i];
+                queue.push(nodes[i]);
+            }
+            i++;
+        }
+        return root;
+    }
+
+    function cloneTree(root) {
+        if (!root) return null;
+        let newNode = new TreeNode(root.val, root.id);
+        newNode.status = root.status;
+        newNode.heightVal = root.heightVal; // Copy height info
+        newNode.left = cloneTree(root.left);
+        newNode.right = cloneTree(root.right);
+        return newNode;
+    }
+
+    // --- The Algorithm (Record Logic) ---
+    
+    function generateSnapshots(initialRoot) {
+        let history = [];
+
+        function save(msg, rootState) {
+            history.push({
+                tree: cloneTree(rootState),
+                message: msg
+            });
+        }
+
+        // Helper to update specific node in the clone for visualization updates
+        // We need to modify the 'simulationRoot' structure during recursion
+        function findNode(root, id) {
+            if (!root) return null;
+            if (root.id === id) return root;
+            return findNode(root.left, id) || findNode(root.right, id);
+        }
+
+        let simulationRoot = cloneTree(initialRoot);
+        save("Initial State", simulationRoot);
+
+        // The Python Solution Logic translated
+        function dfs(nodeId) {
+            let node = findNode(simulationRoot, nodeId);
+            if (!node) return 0;
+
+            // 1. Visit
+            node.status = 'visiting';
+            save(`DFS: Visiting Node ${node.val}`, simulationRoot);
+
+            // 2. Left Recursion
+            let leftId = node.left ? node.left.id : null;
+            let left = dfs(leftId);
+            
+            // Refresh node ref as recursive calls might have triggered saves/clones
+            node = findNode(simulationRoot, nodeId); 
+
+            if (left === -1) {
+                node.status = 'error';
+                save(`Left child returned -1. Short circuiting Node ${node.val}!`, simulationRoot);
+                return -1;
+            }
+
+            // 3. Right Recursion
+            let rightId = node.right ? node.right.id : null;
+            let right = dfs(rightId);
+            
+            node = findNode(simulationRoot, nodeId);
+
+            if (right === -1) {
+                node.status = 'error';
+                save(`Right child returned -1. Short circuiting Node ${node.val}!`, simulationRoot);
+                return -1;
+            }
+
+            // 4. Logic Check
+            node.status = 'checking';
+            save(`Checking: |Left(${left}) - Right(${right})| > 1?`, simulationRoot);
+
+            if (Math.abs(left - right) > 1) {
+                node.status = 'error';
+                save(`Imbalance found at Node ${node.val}! Diff is ${Math.abs(left-right)}. Return -1.`, simulationRoot);
+                return -1;
+            }
+
+            // 5. Success Return
+            let h = Math.max(left, right) + 1;
+            node.status = 'balanced';
+            node.heightVal = h; // Visual indicator
+            save(`Node ${node.val} is Balanced. Height: ${h}`, simulationRoot);
+            
+            return h;
+        }
+
+        let result = dfs(simulationRoot ? simulationRoot.id : null);
+        
+        if(result !== -1) {
+            save("Tree is Balanced (True)", simulationRoot);
+        } else {
+            save("Tree is Unbalanced (False)", simulationRoot);
+        }
+        
+        return history;
+    }
+
+    // --- D3 Visualization ---
+
+    const svg = d3.select("#tree-container").append("svg")
+        .attr("width", width)
+        .attr("height", height)
+        .append("g")
+        .attr("transform", "translate(0, 40)");
+
+    const treeLayout = d3.tree().size([width, height - 100]);
+
+    function render(rootNode) {
+        if (!rootNode) {
+            svg.selectAll("*").remove();
+            return;
+        }
+
+        const hierarchy = d3.hierarchy(rootNode);
+        const treeData = treeLayout(hierarchy);
+
+        // Links
+        const links = svg.selectAll(".link")
+            .data(treeData.links(), d => `${d.source.data.id}-${d.target.data.id}`);
+
+        links.enter().append("path")
+            .attr("class", "link")
+            .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y))
+            .merge(links)
+            .transition().duration(duration/2)
+            .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y));
+
+        links.exit().remove();
+
+        // Nodes
+        const nodes = svg.selectAll(".node")
+            .data(treeData.descendants(), d => d.data.id);
+
+        const nodesEnter = nodes.enter().append("g")
+            .attr("class", d => `node ${d.data.status}`)
+            .attr("transform", d => `translate(${d.x},${d.y})`);
+
+        // Circle
+        nodesEnter.append("circle").attr("r", 20);
+
+        // Value Text
+        nodesEnter.append("text")
+            .attr("class", "val")
+            .attr("dy", "1px")
+            .text(d => d.data.val);
+
+        // Height Badge (New for this problem)
+        nodesEnter.append("text")
+            .attr("class", "height-label")
+            .attr("x", 28) // Position to right of circle
+            .attr("y", 5)
+            .text(d => d.data.heightVal !== null ? `H:${d.data.heightVal}` : "");
+
+        // Update
+        const nodesUpdate = nodesEnter.merge(nodes);
+        
+        nodesUpdate.transition().duration(duration/2)
+            .attr("transform", d => `translate(${d.x},${d.y})`)
+            .attr("class", d => `node ${d.data.status}`);
+        
+        // Update Height Text specifically
+        nodesUpdate.select(".height-label")
+            .text(d => d.data.heightVal !== null ? `H:${d.data.heightVal}` : "")
+            .attr("opacity", d => d.data.heightVal !== null ? 1 : 0);
+
+        nodes.exit().remove();
+    }
+
+    // --- Controller Logic ---
+
+    function loadTestCase(index) {
+        stopAutoPlay();
+        const arr = testCases[index];
+        const root = arrayToTree(arr);
+        snapshots = generateSnapshots(root);
+        currentStepIndex = 0;
+        updateUI();
+    }
+
+    function updateUI() {
+        if (!snapshots[currentStepIndex]) return;
+        const s = snapshots[currentStepIndex];
+        d3.select("#status-text").text(s.message);
+        d3.select("#step-counter").text(`Step: ${currentStepIndex + 1}/${snapshots.length}`);
+        render(s.tree);
+
+        document.getElementById("btn-prev").disabled = currentStepIndex === 0;
+        document.getElementById("btn-next").disabled = currentStepIndex === snapshots.length - 1;
+    }
+
+    function nextStep() {
+        if (currentStepIndex < snapshots.length - 1) {
+            currentStepIndex++;
+            updateUI();
+        } else {
+            stopAutoPlay();
+        }
+    }
+
+    function prevStep() {
+        if (currentStepIndex > 0) {
+            currentStepIndex--;
+            updateUI();
+        }
+    }
+
+    function toggleAutoPlay() {
+        if (autoPlayInterval) {
+            stopAutoPlay();
+        } else {
+            document.getElementById("btn-play").textContent = "Pause";
+            if (currentStepIndex === snapshots.length - 1) {
+                currentStepIndex = 0;
+                updateUI();
+            }
+            autoPlayInterval = setInterval(nextStep, duration + 200);
+        }
+    }
+
+    function stopAutoPlay() {
+        clearInterval(autoPlayInterval);
+        autoPlayInterval = null;
+        document.getElementById("btn-play").textContent = "Auto Play";
+    }
+
+    // Listeners
+    document.getElementById("test-case-select").addEventListener("change", (e) => loadTestCase(e.target.value));
+    document.getElementById("btn-next").addEventListener("click", () => { stopAutoPlay(); nextStep(); });
+    document.getElementById("btn-prev").addEventListener("click", () => { stopAutoPlay(); prevStep(); });
+    document.getElementById("btn-reset").addEventListener("click", () => { stopAutoPlay(); currentStepIndex = 0; updateUI(); });
+    document.getElementById("btn-play").addEventListener("click", toggleAutoPlay);
+
+    // Init
+    loadTestCase(0);
+
+</script>
+</body>
+</html>
