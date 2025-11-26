@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeetCode 572: Subtree of Another Tree</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --node-fill: #ffffff;
+            --node-stroke: #333;
+            --node-visiting: #fbbf24;    /* Yellow: Currently checking main DFS */
+            --node-same-check: #3b82f6;  /* Blue: Currently comparing in isSame() */
+            --node-match: #10b981;      /* Green: Confirmed match (Final result or isSame True) */
+            --node-mismatch: #ef4444;   /* Red: Value mismatch or structural error */
+            --node-null-match: #a3a3a3; /* Gray: Both are Null (base case True in isSame) */
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 { margin-bottom: 5px; color: #333; }
+        h3 { margin-top: 0; color: #666; font-weight: 400; font-size: 1rem; margin-bottom: 20px;}
+        
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 8px 16px;
+            cursor: pointer;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        button:hover { background-color: #555; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+
+        /* Visualization Area: Increased overall width for more space */
+        #tree-pair-container {
+            display: flex;
+            gap: 20px;
+            width: 840px; 
+            height: 400px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            overflow: hidden;
+            padding: 10px 0;
+        }
+        
+        .tree-container {
+            width: 50%;
+            height: 100%;
+        }
+
+        /* Status Bar */
+        #status-bar {
+            margin-top: 15px;
+            font-family: 'Courier New', Courier, monospace;
+            background: #2d3748;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 800px; 
+            min-height: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* D3 Styles */
+        .node circle {
+            fill: var(--node-fill);
+            stroke: var(--node-stroke);
+            stroke-width: 2px;
+            transition: fill 0.3s, stroke 0.3s;
+        }
+
+        .node text.val {
+            font: 14px sans-serif;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            pointer-events: none;
+            font-weight: bold;
+        }
+
+        .link {
+            fill: none;
+            stroke: #ccc;
+            stroke-width: 2px;
+        }
+
+        /* States */
+        /* Tree P states */
+        .tree-p .node.visiting circle { fill: var(--node-visiting); stroke: #d97706; }
+        .tree-p .node.same-check circle { fill: var(--node-same-check); stroke: #2563eb; }
+        .tree-p .node.match circle { fill: var(--node-match); stroke: #047857; }
+        .tree-p .node.mismatch circle { fill: var(--node-mismatch); stroke: #b91c1c; }
+        .tree-p .node.null-match circle { fill: var(--node-null-match); stroke: #666; }
+
+        /* Tree Q states */
+        .tree-q .node.same-check circle { fill: var(--node-same-check); stroke: #2563eb; }
+        .tree-q .node.match circle { fill: var(--node-match); stroke: #047857; }
+        .tree-q .node.mismatch circle { fill: var(--node-mismatch); stroke: #b91c1c; }
+        .tree-q .node.null-match circle { fill: var(--node-null-match); stroke: #666; }
+
+    </style>
+</head>
+<body>
+
+    <h1>LeetCode 572: Subtree of Another Tree</h1>
+    <h3>Algorithm: isSubtree(root, subRoot) = DFS on root + isSame(root, subRoot)</h3>
+
+    <div class="controls">
+        <label>Test Case:</label>
+        <select id="test-case-select">
+            <option value="0">True: Simple Match [3,4,5,1,2] vs [4,1,2]</option>
+            <option value="1">False: Value Mismatch [3,4,5,1,2] vs [4,1,3]</option>
+            <option value="2">False: SubRoot Bigger [1,2] vs [1,2,3]</option>
+            <option value="3">True: Deep Match [3,4,5,1,2,null,null,0,null,null,null,6] vs [1,2,0]</option>
+        </select>
+        
+        <div style="width: 20px;"></div>
+
+        <button id="btn-prev">Prev</button>
+        <button id="btn-play">Auto Play</button>
+        <button id="btn-next">Next</button>
+        <button id="btn-reset">Reset</button>
+    </div>
+
+    <div id="tree-pair-container">
+        <div class="tree-container tree-p">
+            <h4 style="text-align: center;">Tree P (Root)</h4>
+            <svg id="svg-p" width="420" height="350"></svg>
+        </div>
+        <div class="tree-container tree-q">
+            <h4 style="text-align: center;">Tree Q (SubRoot)</h4>
+            <svg id="svg-q" width="420" height="350"></svg>
+        </div>
+    </div>
+
+    <div id="status-bar">
+        <span id="status-text">Ready</span>
+        <span id="step-counter">Step: 0/0</span>
+    </div>
+
+<script>
+    // --- Configuration ---
+    const width = 420; // SVG width (per tree)
+    const height = 350;
+    const duration = 600; 
+    
+    // --- State Management ---
+    let snapshots = [];
+    let currentStepIndex = 0;
+    let autoPlayInterval = null;
+
+    // Test cases (root, subRoot)
+    const testCases = [
+        // 0: Simple Match
+        [[3,4,5,1,2], [4,1,2]], 
+        // 1: Value Mismatch
+        [[3,4,5,1,2], [4,1,3]],
+        // 2: SubRoot Bigger
+        [[1,2], [1,2,3]],
+        // 3: Deep Match: SubRoot [1,2,0] is a subtree of Root
+        [[3,4,5,1,2,null,null,0,null,null,null,6], [1,2,0]] 
+    ];
+
+    // --- Tree Logic ---
+    
+    class TreeNode {
+        constructor(val, id, treeName, isNull = false) {
+            this.val = val;
+            this.id = `${treeName}-${id}`; 
+            this.rawId = id; // Original index for mapping
+            this.treeName = treeName;
+            this.left = null;
+            this.right = null;
+            this.status = 'idle'; // 'idle', 'visiting', 'same-check', 'match', 'mismatch', 'null-match'
+            this.isNull = isNull; // Flag to indicate a structural placeholder
+        }
+    }
+
+    // Function creates placeholder nodes for nulls to preserve array structure indexing
+    function arrayToTree(arr, treeName) {
+        if (!arr || arr.length === 0) return null;
+        
+        // 1. Create all nodes/placeholders
+        let nodes = arr.map((val, index) => 
+            val !== null 
+                ? new TreeNode(val, index, treeName) 
+                : new TreeNode(null, index, treeName, true) // Create placeholder node
+        );
+        
+        let root = nodes[0];
+        if (root.isNull) return null; 
+
+        let queue = [root];
+        let i = 1;
+
+        while (i < arr.length && queue.length > 0) {
+            let current = queue.shift();
+            
+            if (!current.isNull) {
+                
+                // Left Child (2i + 1)
+                if (i < arr.length) {
+                    current.left = nodes[i];
+                    queue.push(nodes[i]);
+                }
+                i++;
+                
+                // Right Child (2i + 2)
+                if (i < arr.length) {
+                    current.right = nodes[i];
+                    queue.push(nodes[i]);
+                }
+                i++;
+            }
+        }
+        return root;
+    }
+
+    function cloneTree(root) {
+        if (!root) return null;
+        let newNode = new TreeNode(root.val, root.rawId, root.treeName, root.isNull); 
+        newNode.status = root.status;
+        newNode.left = cloneTree(root.left);
+        newNode.right = cloneTree(root.right);
+        return newNode;
+    }
+
+    // --- The Algorithm (Record Logic) ---
+    
+    function generateSnapshots(initialP, initialQ) {
+        let history = [];
+        let finalResult = false;
+
+        // Clone the initial trees for simulation
+        let simP = cloneTree(initialP);
+        let simQ = cloneTree(initialQ);
+        const subRootVal = simQ ? simQ.val : 'NULL';
+
+        function save(msg) {
+            history.push({
+                pTree: cloneTree(simP),
+                qTree: cloneTree(simQ),
+                message: msg,
+                result: finalResult
+            });
+        }
+
+        // Helper to update specific node in the clone
+        function findNode(root, rawId) {
+            if (!root || rawId === null) return null;
+            if (root.rawId === rawId) return root;
+            return findNode(root.left, rawId) || findNode(root.right, rawId);
+        }
+
+        save(`Initial State: Find a subtree in P that matches SubRoot Q:${subRootVal}`);
+
+        // --- isSame (LC 100 Logic) ---
+        // Synchronized DFS to check if two subtrees are identical
+        function isSameRecursive(pId, qId) {
+            
+            // Get nodes (will return null if ID is null)
+            let p = findNode(simP, pId);
+            let q = findNode(simQ, qId);
+            
+            // 1. Base Case 1: Both are NULL pointers (virtual end of tree)
+            if (p === null && q === null) {
+                // If the comparison started at a real node, we mark the previous nodes back to match
+                if (pId !== 0 && qId !== 0) {
+                     // Since we cannot easily go up, we just log and return true
+                }
+                save(`isSame: Both are NULL pointers. Match! Returning True.`);
+                return true;
+            }
+            
+            // 2. Base Case 2: One is NULL, one is not (structure mismatch or array boundary mismatch)
+            if (p === null || q === null) {
+                if (p && !p.isNull) p.status = 'mismatch';
+                if (q && !q.isNull) q.status = 'mismatch';
+                const pVal = p ? (p.isNull ? 'NULL' : p.val) : 'NULL';
+                const qVal = q ? (q.isNull ? 'NULL' : q.val) : 'NULL';
+                save(`isSame: Structure Mismatch (${pVal} vs ${qVal}). Returning False.`);
+                return false;
+            }
+
+            // At this point, p and q are guaranteed to be non-null TreeNode objects (real or placeholder).
+            
+            // 3. Check placeholder mismatch (e.g., [1,2] vs [1,null,2] at left child)
+            if (p.isNull && q.isNull) {
+                p.status = 'null-match'; // Gray
+                q.status = 'null-match';
+                save(`isSame: Both are NULL placeholders. Match! Continuing.`);
+                return true;
+            }
+
+            // 4. Check structure mismatch (one placeholder, one real node)
+            if (p.isNull !== q.isNull) {
+                if (!p.isNull) p.status = 'mismatch';
+                if (!q.isNull) q.status = 'mismatch';
+                save(`isSame: Structural Mismatch (${p.isNull ? 'NULL' : p.val} vs ${q.isNull ? 'NULL' : q.val}). Returning False.`);
+                return false;
+            }
+            
+            // Now both are guaranteed to be real, non-placeholder nodes.
+
+            // 5. Value Mismatch
+            if (p.val !== q.val) {
+                p.status = 'mismatch';
+                q.status = 'mismatch';
+                save(`isSame: Value Mismatch: ${p.val} != ${q.val}. Returning False.`);
+                return false;
+            }
+            
+            // 6. Recursive Step: Values match
+            p.status = 'same-check'; // Blue
+            q.status = 'same-check';
+            save(`isSame: Match found: ${p.val} == ${q.val}. Recursing Left.`);
+
+            // Safely get child IDs or null if pointer is null (array boundary reached)
+            let pLeftId = p.left ? p.left.rawId : null;
+            let qLeftId = q.left ? q.left.rawId : null;
+            
+            let leftResult = isSameRecursive(pLeftId, qLeftId);
+
+            if (!leftResult) {
+                save(`isSame: Left side failed. Short circuiting Right and returning False.`);
+                return false;
+            }
+
+            // Recurse Right
+            p = findNode(simP, pId); // Refresh refs
+            q = findNode(simQ, qId);
+            
+            p.status = 'same-check'; // Blue
+            q.status = 'same-check';
+            save(`isSame: Left side succeeded. Recursing Right.`);
+
+            let pRightId = p.right ? p.right.rawId : null;
+            let qRightId = q.right ? q.right.rawId : null;
+
+            let rightResult = isSameRecursive(pRightId, qRightId);
+            
+            // If the whole pair matches, mark them green (match)
+            if (rightResult) {
+                p.status = 'match'; 
+                q.status = 'match';
+            } else {
+                // If it fails on the way up, mark it as mismatch
+                p.status = 'mismatch'; 
+                q.status = 'mismatch';
+            }
+
+            return rightResult;
+        }
+
+        // --- isSubtree (Main LC 572 Logic) ---
+        // DFS on P to find a starting point for isSame
+        function isSubtreeRecursive(pId) {
+            
+            // Base Case 1: P is finished (reached the end of the root tree without finding a match)
+            if (pId === null) return false;
+            
+            let p = findNode(simP, pId);
+
+            // Skip placeholders
+            if (p.isNull) return false; 
+            
+            // Mark current node in P as visiting (Yellow)
+            p.status = 'visiting';
+            save(`DFS: Visiting P:${p.val}. Checking if P is SubRoot Q.`);
+
+            // 1. Try isSame(p, subRoot)
+            if (p.val === subRootVal) {
+                save(`DFS: Found value match (${p.val} == ${subRootVal}). Starting isSame check.`);
+                
+                // Temporarily mark the current P node as the check target (Blue)
+                p.status = 'same-check';
+                
+                // Reset Q tree status to idle before starting new isSame check
+                function resetQStatus(node) {
+                    if (!node || node.isNull) return;
+                    node.status = 'idle';
+                    resetQStatus(node.left);
+                    resetQStatus(node.right);
+                }
+                resetQStatus(simQ);
+                
+                let matchFound = isSameRecursive(pId, 0); // Start isSame with P's current node and Q's root (ID 0)
+
+                if (matchFound) {
+                    // Permanently mark the entire matching subtree in P as 'match' (Green)
+                    // We need a helper to update the whole subtree
+                    function markSubtree(node) {
+                        if (!node || node.isNull) return;
+                        node.status = 'match';
+                        markSubtree(node.left);
+                        markSubtree(node.right);
+                    }
+                    markSubtree(p);
+                    finalResult = true;
+                    save(`FINAL: isSame(P:${p.val}, Q) returned True. Subtree found!`);
+                    return true;
+                } else {
+                    // isSame returned False. Reset P's status and continue DFS.
+                    p.status = 'visiting'; // Back to yellow to continue traversal
+                    save(`DFS: isSame failed. Continuing search on P's children.`);
+                }
+            }
+
+            // 2. Recurse Left
+            let pLeftId = p.left ? p.left.rawId : null;
+            if (isSubtreeRecursive(pLeftId)) {
+                return true; // Short-circuit
+            }
+            
+            // 3. Recurse Right
+            let pRightId = p.right ? p.right.rawId : null;
+            if (isSubtreeRecursive(pRightId)) {
+                return true; // Short-circuit
+            }
+            
+            // If no match was found in this branch, mark as idle/finished and return False
+            p.status = 'idle';
+            save(`DFS: Finished checking subtree at P:${p.val}. Backtracking.`);
+            return false;
+        }
+
+        // --- Execution Start ---
+        if (!initialQ) {
+            finalResult = !initialP; // If subRoot is null, it's a subtree of any tree (or false if root is non-null)
+            save(`SubRoot is NULL. Result: ${finalResult ? 'True' : 'False'}`);
+        } else if (!initialP) {
+            finalResult = false;
+            save(`Root is NULL but SubRoot is not. Result: False`);
+        } else {
+            isSubtreeRecursive(0); // Start DFS from root P (ID 0)
+        }
+
+
+        // Ensure final status is recorded if not already short-circuited
+        if (history[history.length - 1].result === false && history[history.length - 1].message !== 'Comparison finished. Subtree not found. Result: False') {
+             save(`Comparison finished. Subtree not found. Result: False`);
+        }
+        
+        return history;
+    }
+
+    // --- D3 Visualization ---
+
+    const treeLayout = d3.tree().nodeSize([35, 50]); 
+
+    // Translate the group horizontally by half the SVG width to center the root node (which D3 places at x=0).
+    const svgP = d3.select("#svg-p").append("g")
+        .attr("transform", `translate(${width / 2}, 20)`);
+        
+    const svgQ = d3.select("#svg-q").append("g")
+        .attr("transform", `translate(${width / 2}, 20)`);
+
+    function renderTree(svgElement, rootNode, treeName) {
+        // Clear the SVG on every render
+        svgElement.selectAll("g > *").remove(); 
+        if (!rootNode) return;
+
+        // Use the placeholder nodes for hierarchy calculation
+        const hierarchy = d3.hierarchy(rootNode, d => {
+            let children = [];
+            if (d.left) children.push(d.left);
+            if (d.right) children.push(d.right);
+            return children;
+        });
+
+        const treeData = treeLayout(hierarchy);
+
+        // Links
+        const links = svgElement.selectAll(".link")
+            .data(treeData.links(), d => `${d.source.data.id}-${d.target.data.id}`);
+
+        links.enter().append("path")
+            .attr("class", "link")
+            .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y));
+
+        links.exit().remove();
+
+        // Nodes
+        const nodes = svgElement.selectAll(".node")
+            .data(treeData.descendants(), d => d.data.id);
+
+        const nodesEnter = nodes.enter().append("g")
+            .attr("class", d => `node ${d.data.status}`)
+            .classed(treeName, true) // Add tree class for scoped styling
+            .attr("transform", d => `translate(${d.x},${d.y})`);
+
+        // Circle - Apply opacity based on isNull to hide placeholder nodes
+        nodesEnter.append("circle")
+            .attr("r", 15)
+            .style("opacity", d => d.data.isNull ? 0 : 1); 
+
+        // Value Text - Apply opacity based on isNull
+        nodesEnter.append("text")
+            .attr("class", "val")
+            .attr("dy", "1px")
+            .text(d => d.data.val)
+            .style("opacity", d => d.data.isNull ? 0 : 1); 
+
+        // Update
+        const nodesUpdate = nodesEnter.merge(nodes);
+        
+        // --- FIX: Apply class changes directly to selection, not the transition result ---
+        nodesUpdate
+            .attr("class", d => `node ${d.data.status}`)
+            .classed(treeName, true); 
+        
+        // Apply transform transition
+        nodesUpdate.transition().duration(duration/2)
+            .attr("transform", d => `translate(${d.x},${d.y})`);
+            
+        // Transition update for opacity and text for existing nodes
+        nodesUpdate.select('circle')
+            .transition().duration(duration/2)
+            .style("opacity", d => d.data.isNull ? 0 : 1);
+
+        nodesUpdate.select('text')
+            .transition().duration(duration/2)
+            .style("opacity", d => d.data.isNull ? 0 : 1);
+
+
+        nodes.exit().remove();
+    }
+
+    // --- Controller Logic ---
+
+    function loadTestCase(index) {
+        stopAutoPlay();
+        const [arrP, arrQ] = testCases[index];
+        const rootP = arrayToTree(arrP, 'P');
+        const rootQ = arrayToTree(arrQ, 'Q');
+        snapshots = generateSnapshots(rootP, rootQ);
+        currentStepIndex = 0;
+        updateUI();
+    }
+
+    function updateUI() {
+        if (!snapshots[currentStepIndex]) return;
+        const s = snapshots[currentStepIndex];
+        
+        d3.select("#status-text").text(s.message);
+        d3.select("#step-counter").text(`Step: ${currentStepIndex + 1}/${snapshots.length}`);
+        
+        renderTree(svgP, s.pTree, 'tree-p');
+        renderTree(svgQ, s.qTree, 'tree-q');
+
+        document.getElementById("btn-prev").disabled = currentStepIndex === 0;
+        document.getElementById("btn-next").disabled = currentStepIndex === snapshots.length - 1;
+        
+        // Final result styling
+        if (currentStepIndex === snapshots.length - 1) {
+            const resultColor = s.result ? '#10b981' : '#ef4444';
+            d3.select("#status-bar").style('background-color', resultColor);
+        } else {
+            d3.select("#status-bar").style('background-color', '#2d3748');
+        }
+    }
+
+    function nextStep() {
+        if (currentStepIndex < snapshots.length - 1) {
+            currentStepIndex++;
+            updateUI();
+        } else {
+            stopAutoPlay();
+        }
+    }
+
+    function prevStep() {
+        if (currentStepIndex > 0) {
+            currentStepIndex--;
+            updateUI();
+        }
+    }
+
+    function toggleAutoPlay() {
+        if (autoPlayInterval) {
+            stopAutoPlay();
+        } else {
+            document.getElementById("btn-play").textContent = "Pause";
+            if (currentStepIndex === snapshots.length - 1) {
+                currentStepIndex = 0;
+                updateUI();
+            }
+            autoPlayInterval = setInterval(nextStep, duration + 200);
+        }
+    }
+
+    function stopAutoPlay() {
+        clearInterval(autoPlayInterval);
+        autoPlayInterval = null;
+        document.getElementById("btn-play").textContent = "Auto Play";
+    }
+
+    // Listeners
+    document.getElementById("test-case-select").addEventListener("change", (e) => loadTestCase(e.target.value));
+    document.getElementById("btn-next").addEventListener("click", () => { stopAutoPlay(); nextStep(); });
+    document.getElementById("btn-prev").addEventListener("click", () => { stopAutoPlay(); prevStep(); });
+    document.getElementById("btn-reset").addEventListener("click", () => { stopAutoPlay(); currentStepIndex = 0; updateUI(); });
+    document.getElementById("btn-play").addEventListener("click", toggleAutoPlay);
+
+    // Init
+    loadTestCase(0);
+
+</script>
+</body>
+</html>
