@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeetCode 206: Reverse Linked List (Iterative)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .node-circle {
+            fill: #ffffff;
+            stroke: #4f46e5;
+            stroke-width: 3px;
+            transition: all 0.3s ease-out;
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+        }
+        .node-text {
+            font-size: 16px;
+            font-weight: 600;
+            fill: #1f2937;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            pointer-events: none;
+        }
+        .pointer-text {
+            font-size: 12px;
+            font-weight: 700;
+            text-anchor: middle;
+            pointer-events: none;
+            transition: all 0.3s ease-out;
+            text-shadow: 0px 1px 2px white;
+        }
+        /* Base link style */
+        .link-path {
+            fill: none;
+            stroke: #9ca3af; /* Gray-400 */
+            stroke-width: 2px;
+            transition: stroke 0.3s;
+        }
+        /* Specific override for reversed links */
+        path.link-path.reversed {
+            stroke: #f59e0b !important; /* Amber-500 */
+        }
+        /* Specific override for null links */
+        path.link-path.null-link {
+            stroke: #ef4444 !important; /* Red-500 */
+            stroke-dasharray: 4;
+        }
+        
+        #visualization-container {
+            position: relative;
+            width: 100%;
+            max-width: 900px;
+            min-height: 280px;
+            margin-top: 20px;
+            overflow-x: auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+        
+        .var-box {
+            transition: all 0.3s;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="max-w-4xl w-full flex flex-col items-center">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">Linked List Reversal Visualization</h1>
+        <h3 class="text-lg text-gray-600 mb-6">Algorithm: Iterative (using `prev`, `curr`, `next`)</h3>
+
+        <!-- Controls -->
+        <div class="controls bg-white p-4 sm:p-6 rounded-xl shadow-lg flex flex-wrap gap-4 items-center justify-center border border-gray-100 w-full">
+            <div class="flex items-center gap-2">
+                <label class="font-semibold text-gray-700">Test Case:</label>
+                <select id="test-case-select" class="p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150">
+                    <option value="0">Default: [1, 2, 3, 4, 5]</option>
+                    <option value="1">Empty List: []</option>
+                    <option value="2">Single Node: [10]</option>
+                    <option value="3">Short List: [A, B]</option>
+                </select>
+            </div>
+            
+            <div class="hidden sm:block w-px h-8 bg-gray-200"></div>
+
+            <div class="flex gap-2">
+                <button id="btn-prev" class="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition disabled:bg-gray-400">
+                    &larr; Prev
+                </button>
+                <button id="btn-play" class="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition disabled:bg-gray-400">
+                    Auto Play
+                </button>
+                <button id="btn-next" class="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition disabled:bg-gray-400">
+                    Next &rarr;
+                </button>
+                <button id="btn-reset" class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg shadow-md hover:bg-gray-600 transition">
+                    Reset
+                </button>
+            </div>
+        </div>
+
+        <!-- Variable Watcher -->
+        <div class="grid grid-cols-3 gap-4 w-full max-w-4xl mt-6">
+            <div id="var-prev" class="var-box bg-white p-3 rounded-lg shadow border-l-4 border-emerald-500 flex flex-col items-center">
+                <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">prev</span>
+                <span class="var-val font-mono text-lg font-bold text-gray-800">NULL</span>
+            </div>
+            <div id="var-curr" class="var-box bg-white p-3 rounded-lg shadow border-l-4 border-blue-500 flex flex-col items-center">
+                <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">curr</span>
+                <span class="var-val font-mono text-lg font-bold text-gray-800">NULL</span>
+            </div>
+            <div id="var-next" class="var-box bg-white p-3 rounded-lg shadow border-l-4 border-amber-500 flex flex-col items-center">
+                <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">next</span>
+                <span class="var-val font-mono text-lg font-bold text-gray-800">NULL</span>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div id="status-bar" class="w-full max-w-4xl mt-4 p-3 rounded-lg text-center font-mono text-white text-sm shadow-md bg-gray-700 transition-all duration-300">
+            <span id="status-text">Ready</span>
+        </div>
+        
+        <!-- Visualization -->
+        <div id="visualization-container">
+            <svg id="list-svg" width="100%" height="200"></svg>
+        </div>
+        
+        <!-- Code Display -->
+        <div class="w-full max-w-4xl mt-6 bg-gray-800 p-4 rounded-xl shadow-xl">
+            <pre id="code-display" class="text-gray-200 text-sm overflow-x-auto"></pre>
+        </div>
+    </div>
+
+<script>
+    // --- Configuration ---
+    const NODE_RADIUS = 25;
+    const NODE_SPACING = 100;
+    const Y_CENTER = 100;
+    const POINTER_OFFSET = 45; 
+    const ANIMATION_DURATION = 400; 
+
+    // --- State Management ---
+    let snapshots = [];
+    let currentStepIndex = 0;
+    let autoPlayInterval = null;
+
+    // --- Data Structure ---
+    class ListNode {
+        constructor(val, id) {
+            this.val = val;
+            this.id = id;
+            this.next = null;
+            this.visNextId = null;
+            this.isHead = false;
+        }
+    }
+
+    // --- Test Cases ---
+    const testCases = [
+        [1, 2, 3, 4, 5],
+        [],
+        [10],
+        ['A', 'B'],
+    ];
+    
+    // --- Logic ---
+
+    function arrayToList(arr) {
+        if (!arr || arr.length === 0) return null;
+        let head = null;
+        let tail = null;
+        arr.forEach((val, index) => {
+            const newNode = new ListNode(val, `node-${index}`);
+            if (index === 0) {
+                head = newNode;
+                head.isHead = true;
+                tail = newNode;
+            } else {
+                tail.next = newNode;
+                tail.visNextId = newNode.id;
+                tail = newNode;
+            }
+        });
+        return head;
+    }
+    
+    function generateSnapshots(arr) {
+        let history = [];
+        // Empty list case
+        if (!arr || arr.length === 0) {
+            history.push({ 
+                list: [], 
+                prevId: null, currId: null, nextId: null, 
+                prevVal: "NULL", currVal: "NULL", nextVal: "NULL",
+                message: "Empty list. Reversal is complete.", line: null 
+            });
+            return history;
+        }
+        
+        let head = arrayToList(arr);
+        
+        // Map for tracking live state
+        let allNodesMap = new Map();
+        let temp = head;
+        while(temp) {
+            allNodesMap.set(temp.id, temp);
+            temp = temp.next;
+        }
+
+        // The iterative algorithm
+        let prev = null;
+        let curr = head;
+        let next = null;
+
+        const save = (msg, line) => {
+            const listData = Array.from(allNodesMap.values()).map(n => ({
+                val: n.val,
+                id: n.id,
+                visNextId: n.visNextId,
+                isHead: n.isHead 
+            }));
+
+            history.push({
+                list: listData,
+                prevId: prev ? prev.id : null,
+                currId: curr ? curr.id : null,
+                nextId: next ? next.id : null,
+                // Explicit values for the Variables Panel
+                prevVal: prev ? `Node ${prev.val}` : "NULL",
+                currVal: curr ? `Node ${curr.val}` : "NULL",
+                nextVal: next ? `Node ${next.val}` : "NULL",
+                message: msg,
+                line: line
+            });
+        };
+        
+        save(`Initial State. List: [${arr.join(', ')}].`, 3); 
+
+        save(`Pointers initialization: prev = null, curr = head.`, 4);
+        
+        let iteration = 0;
+        
+        while (curr !== null) {
+            iteration++;
+            const currVal = curr.val;
+
+            // FIX: Reset 'next' to null visually at the start of loop to simulate scope initialization
+            next = null;
+            save(`Iteration ${iteration}: Check loop condition (curr != null).`, 6);
+
+            // Line 7: ListNode next = curr.next;
+            next = curr.next;
+            save(`Initialize next = curr.next.`, 7);
+
+            // Line 8: curr.next = prev;
+            const targetId = prev ? prev.id : null;
+            const currNodeInMap = allNodesMap.get(curr.id);
+            if (currNodeInMap) {
+                currNodeInMap.visNextId = targetId;
+            }
+            curr.next = prev;
+            save(`curr.next = prev. Link reversed.`, 8);
+
+            // Line 9: prev = curr;
+            prev = curr;
+            save(`prev = curr.`, 9);
+
+            // Line 10: curr = next;
+            curr = next;
+            save(`curr = next.`, 10);
+        }
+
+        save(`Loop terminated (curr is null). Return prev.`, 12);
+        
+        return history;
+    }
+
+    // --- D3 Visualization ---
+
+    const svg = d3.select("#list-svg");
+    const mainGroup = svg.append("g").attr("id", "main-group");
+
+    // Define Arrowhead markers
+    // Note: We define separate markers for normal, reversed (orange), and null (red)
+    svg.append('defs').html(`
+        <marker id="arrow" markerWidth="10" markerHeight="10" refX="19" refY="5" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,10 L10,5 z" fill="#9ca3af" />
+        </marker>
+        <marker id="reversed-arrow" markerWidth="10" markerHeight="10" refX="19" refY="5" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,10 L10,5 z" fill="#f59e0b" />
+        </marker>
+        <marker id="null-marker" markerWidth="10" markerHeight="10" refX="19" refY="5" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,10 L10,5 z" fill="#ef4444" />
+        </marker>
+        <marker id="pointer-arrow" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,10 L10,5 z" fill="#374151" />
+        </marker>
+    `);
+
+    const CODE_SNIPPET = `
+class Solution {
+    public ListNode reverseList(ListNode head) {
+        ListNode prev = null;   // Line 4
+        ListNode curr = head;   // Line 5
+        while (curr != null) {  // Line 6
+            ListNode next = curr.next;   // Line 7
+            curr.next = prev;            // Line 8
+            prev = curr;                 // Line 9
+            curr = next;                 // Line 10
+        }
+        return prev;            // Line 12
+    }
+}
+`.trim();
+
+    function renderCode(line) {
+        const lines = CODE_SNIPPET.split('\n');
+        // Adjusted line map to match the new step logic
+        const lineMap = { 3: 1, 4: 2, 5: 3, 6: 4, 7: 5, 8: 6, 9: 7, 10: 8, 11: 9, 12: 10 };
+        const highlightedIndex = lineMap[line];
+
+        const htmlContent = lines.map((l, i) => {
+            const isHighlighted = i === highlightedIndex;
+            const color = isHighlighted ? 'text-yellow-300 bg-gray-700' : 'text-gray-200';
+            return `<div class="transition-all duration-300 ${color} ${isHighlighted ? 'font-semibold' : ''} px-2 rounded-md">${l}</div>`;
+        }).join('');
+
+        d3.select("#code-display").html(htmlContent);
+    }
+
+    function updateVariables(s) {
+        d3.select("#var-prev .var-val").text(s.prevVal).style("color", s.prevId !== null ? "#059669" : "#9ca3af");
+        d3.select("#var-curr .var-val").text(s.currVal).style("color", s.currId !== null ? "#3b82f6" : "#9ca3af");
+        d3.select("#var-next .var-val").text(s.nextVal).style("color", s.nextId !== null ? "#f59e0b" : "#9ca3af");
+    }
+
+    function renderList(listData, prevId, currId, nextId) {
+        mainGroup.selectAll("*").remove(); 
+        
+        if (listData.length === 0) {
+            mainGroup.append("text").attr("x", "50%").attr("y", "50%")
+               .attr("text-anchor", "middle").attr("font-size", "18px")
+               .attr("fill", "#6b7280").text("The list is empty.");
+            return;
+        }
+
+        const totalWidth = listData.length * NODE_SPACING;
+        const containerWidth = svg.node().getBoundingClientRect().width;
+        const startX = Math.max(50, (containerWidth / 2) - (totalWidth / 2));
+        svg.attr("width", Math.max(containerWidth, totalWidth + 100));
+
+        // Helper to get Node Coordinates
+        const getNodePos = (id) => {
+            const index = listData.findIndex(d => d.id === id);
+            return index !== -1 ? { x: startX + index * NODE_SPACING, y: Y_CENTER } : null;
+        };
+
+        // --- 1. Draw Links ---
+        listData.forEach(d => {
+            const sourcePos = getNodePos(d.id);
+            const targetPos = getNodePos(d.visNextId);
+            
+            if (sourcePos) {
+                const sourceIndex = listData.findIndex(n => n.id === d.id);
+                
+                if (targetPos) {
+                    // Regular Link
+                    const targetIndex = listData.findIndex(n => n.id === d.visNextId);
+                    const isReversed = targetIndex < sourceIndex;
+                    
+                    // Adjust path endpoints to stop at radius
+                    const dx = targetPos.x - sourcePos.x;
+                    const dy = targetPos.y - sourcePos.y;
+                    const angle = Math.atan2(dy, dx);
+                    // Shorten line so marker doesn't overlap circle
+                    const pad = NODE_RADIUS + 5; 
+                    
+                    const x1 = sourcePos.x + Math.cos(angle) * NODE_RADIUS;
+                    const y1 = sourcePos.y + Math.sin(angle) * NODE_RADIUS;
+                    const x2 = targetPos.x - Math.cos(angle) * pad;
+                    const y2 = targetPos.y - Math.sin(angle) * pad;
+
+                    mainGroup.append("path")
+                        .attr("class", `link-path ${isReversed ? 'reversed' : ''}`)
+                        .attr("d", `M ${x1} ${y1} L ${x2} ${y2}`)
+                        .attr("marker-end", isReversed ? "url(#reversed-arrow)" : "url(#arrow)");
+
+                } else if (d.visNextId === null) {
+                    // Null Link
+                    // If it's the original head (start of visual chain), draw Null to LEFT.
+                    // If it's the original tail (end of visual chain), draw Null to RIGHT.
+                    const drawLeft = d.isHead;
+                    
+                    const x1 = sourcePos.x + (drawLeft ? -NODE_RADIUS : NODE_RADIUS);
+                    const x2 = x1 + (drawLeft ? -40 : 40);
+                    
+                    mainGroup.append("path")
+                        .attr("class", `link-path null-link`)
+                        .attr("d", `M ${x1} ${sourcePos.y} L ${x2} ${sourcePos.y}`)
+                        .attr("marker-end", "url(#null-marker)");
+
+                    mainGroup.append("text")
+                        .attr("x", x2 + (drawLeft ? -10 : 10))
+                        .attr("y", sourcePos.y + 4)
+                        .attr("text-anchor", drawLeft ? "end" : "start")
+                        .attr("font-weight", "bold")
+                        .attr("fill", "#ef4444")
+                        .attr("font-size", "12px")
+                        .text("NULL");
+                }
+            }
+        });
+
+        // --- 2. Draw Nodes ---
+        const nodes = mainGroup.selectAll(".list-node")
+            .data(listData, d => d.id);
+
+        const nodesEnter = nodes.enter().append("g")
+            .attr("class", "list-node")
+            .attr("transform", (d, i) => `translate(${startX + i * NODE_SPACING}, ${Y_CENTER})`);
+
+        nodesEnter.append("circle")
+            .attr("r", NODE_RADIUS)
+            .attr("class", "node-circle")
+            .attr("stroke", d => d.isHead ? '#ef4444' : '#4f46e5');
+
+        nodesEnter.append("text")
+            .attr("class", "node-text")
+            .text(d => d.val);
+            
+        nodesEnter.transition().duration(ANIMATION_DURATION).style("opacity", 1);
+        nodes.exit().remove();
+
+        // --- 3. Draw Pointers ---
+        const activePointers = [
+            { id: prevId, label: 'prev', offset: -POINTER_OFFSET, color: '#059669' },
+            { id: currId, label: 'curr', offset: -POINTER_OFFSET - 20, color: '#3b82f6' },
+            { id: nextId, label: 'next', offset: POINTER_OFFSET, color: '#f59e0b' } 
+        ].filter(p => p.id !== null);
+
+        activePointers.forEach(p => {
+            const pos = getNodePos(p.id);
+            if (pos) {
+                // Adjust for top vs bottom pointers
+                const isTop = p.offset < 0;
+                
+                mainGroup.append("text")
+                    .attr("x", pos.x)
+                    .attr("y", pos.y + p.offset + (isTop ? 0 : 10))
+                    .attr("class", "pointer-text")
+                    .attr("fill", p.color)
+                    .text(p.label);
+
+                // Small connector line to node
+                mainGroup.append("line")
+                    .attr("x1", pos.x)
+                    .attr("y1", pos.y + p.offset + (isTop ? 5 : -15)) 
+                    .attr("x2", pos.x)
+                    .attr("y2", isTop ? pos.y - NODE_RADIUS - 3 : pos.y + NODE_RADIUS + 3)
+                    .attr("stroke", p.color)
+                    .attr("stroke-width", 2);
+            }
+        });
+    }
+
+    // --- Controller Logic ---
+
+    function loadTestCase(index) {
+        stopAutoPlay();
+        const arr = testCases[index];
+        snapshots = generateSnapshots(arr);
+        currentStepIndex = 0;
+        updateUI();
+    }
+
+    function updateUI() {
+        if (!snapshots[currentStepIndex]) return;
+        const s = snapshots[currentStepIndex];
+        
+        d3.select("#status-text").text(s.message);
+        d3.select("#step-counter").text(`Step: ${currentStepIndex + 1}/${snapshots.length}`);
+        
+        renderList(s.list, s.prevId, s.currId, s.nextId);
+        updateVariables(s);
+        renderCode(s.line);
+
+        document.getElementById("btn-prev").disabled = currentStepIndex === 0;
+        document.getElementById("btn-next").disabled = currentStepIndex === snapshots.length - 1;
+        
+        if (currentStepIndex === snapshots.length - 1) {
+            const resultColor = s.currId === null ? '#10b981' : '#dc2626';
+            d3.select("#status-bar").style('background-color', resultColor);
+        } else {
+            d3.select("#status-bar").style('background-color', '#374151');
+        }
+    }
+
+    function nextStep() {
+        if (currentStepIndex < snapshots.length - 1) {
+            currentStepIndex++;
+            updateUI();
+        } else {
+            stopAutoPlay();
+        }
+    }
+
+    function prevStep() {
+        if (currentStepIndex > 0) {
+            currentStepIndex--;
+            updateUI();
+        }
+    }
+
+    function toggleAutoPlay() {
+        if (autoPlayInterval) {
+            stopAutoPlay();
+        } else {
+            document.getElementById("btn-play").textContent = "Pause";
+            if (currentStepIndex === snapshots.length - 1) {
+                currentStepIndex = 0;
+                updateUI();
+            }
+            autoPlayInterval = setInterval(nextStep, ANIMATION_DURATION + 300);
+        }
+    }
+
+    function stopAutoPlay() {
+        clearInterval(autoPlayInterval);
+        autoPlayInterval = null;
+        document.getElementById("btn-play").textContent = "Auto Play";
+    }
+
+    document.getElementById("test-case-select").addEventListener("change", (e) => loadTestCase(e.target.value));
+    document.getElementById("btn-next").addEventListener("click", () => { stopAutoPlay(); nextStep(); });
+    document.getElementById("btn-prev").addEventListener("click", () => { stopAutoPlay(); prevStep(); });
+    document.getElementById("btn-reset").addEventListener("click", () => { stopAutoPlay(); currentStepIndex = 0; updateUI(); });
+    document.getElementById("btn-play").addEventListener("click", toggleAutoPlay);
+
+    loadTestCase(0);
+</script>
+</body>
+</html>
