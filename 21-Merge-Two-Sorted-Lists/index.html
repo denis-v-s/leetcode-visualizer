@@ -42,20 +42,14 @@
         /* Base link style */
         .link-path {
             fill: none;
-            stroke: #9ca3af; /* Gray-400 */
-            stroke-width: 2px;
             transition: stroke 0.3s;
         }
-        /* Specific override for merged links */
-        path.link-path.merged {
-            stroke: #10b981 !important; /* Emerald-500 */
-            stroke-width: 3px;
-        }
-        /* Specific override for null links */
-        path.link-path.null-link {
-            stroke: #ef4444 !important; /* Red-500 */
-            stroke-dasharray: 4;
-        }
+        
+        /* Link colors */
+        .link-path.merged { stroke: #10b981 !important; stroke-width: 3px; } /* Thick Green */
+        .link-path.internal-l1 { stroke: #93c5fd !important; stroke-width: 1.5px; } /* Thin Light Blue */
+        .link-path.internal-l2 { stroke: #fdba74 !important; stroke-width: 1.5px; } /* Thin Light Orange */
+        .link-path.null-link { stroke: #ef4444 !important; stroke-dasharray: 4; stroke-width: 2px; }
         
         #visualization-container {
             position: relative;
@@ -159,7 +153,7 @@
     const Y_H_NODE = 240; // Dummy Head 'H' node position (Vertically centered between L1 and L2)
     
     // Map data listIndex (1, 2, or 3) to new visual Y position
-    const ROW_Y_MAP = { 1: Y_LIST_1, 2: Y_LIST_2 }; // List 3 (Dummy) is handled specially in getNodePos
+    const ROW_Y_MAP = { 1: Y_LIST_1, 2: Y_LIST_2 }; 
 
     const POINTER_OFFSET_TOP = 35; // For List1, List2, Head
     const POINTER_OFFSET_BOTTOM = 35; // For Curr
@@ -178,7 +172,8 @@
             this.val = val;
             this.id = id;
             this.listIndex = listIndex; // 1, 2, or 3 (Dummy)
-            this.visNextId = null; // Pointer to the next node visually
+            this.originalNextId = null; // The link that existed in the original list (immutable)
+            this.mergedNextId = null; // The link set by curr.next (mutable)
             this.isDummy = isDummy;
         }
     }
@@ -200,22 +195,24 @@
         const nodes = [];
         let list1Head = null;
         let list2Head = null;
-        let tempTail = null;
+        let lastNode = null;
 
         // Create List 1 Nodes
         arr1.forEach((val, index) => {
             const newNode = new ListNode(val, `node-1-${index}`, 1);
-            if (index === 0) { list1Head = newNode; tempTail = newNode; } 
-            else { tempTail.visNextId = newNode.id; tempTail = newNode; }
+            if (index === 0) { list1Head = newNode; } 
+            if (lastNode) { lastNode.originalNextId = newNode.id; }
+            lastNode = newNode;
             nodes.push(newNode);
         });
 
         // Create List 2 Nodes
-        tempTail = null;
+        lastNode = null;
         arr2.forEach((val, index) => {
             const newNode = new ListNode(val, `node-2-${index}`, 2);
-            if (index === 0) { list2Head = newNode; tempTail = newNode; } 
-            else { tempTail.visNextId = newNode.id; tempTail = newNode; }
+            if (index === 0) { list2Head = newNode; } 
+            if (lastNode) { lastNode.originalNextId = newNode.id; }
+            lastNode = newNode;
             nodes.push(newNode);
         });
 
@@ -233,27 +230,29 @@
         
         // Map for tracking live state
         const allNodesMap = new Map(allNodes.map(n => [n.id, n]));
+        
+        // Helper to clone nodes (deep enough for the snapshot)
+        const getSnapshotData = () => Array.from(allNodesMap.values()).map(n => ({
+            val: n.val,
+            id: n.id,
+            listIndex: n.listIndex,
+            originalNextId: n.originalNextId, // Original L1/L2 link
+            mergedNextId: n.mergedNextId,     // The final, merged list link
+            isDummy: n.isDummy
+        }));
 
         // The iterative algorithm state
         let list1 = list1Head;
         let list2 = list2Head;
         let head = dummyHead;
-        let curr = dummyHead; // Renamed to curr to match Java code
+        let curr = dummyHead; 
 
         const save = (msg, line) => {
-            const listData = Array.from(allNodesMap.values()).map(n => ({
-                val: n.val,
-                id: n.id,
-                listIndex: n.listIndex,
-                visNextId: n.visNextId,
-                isDummy: n.isDummy
-            }));
-
             history.push({
-                list: listData,
+                list: getSnapshotData(),
                 list1Id: list1 ? list1.id : null,
                 list2Id: list2 ? list2.id : null,
-                curId: curr ? curr.id : null, // Uses 'curId' for visualization consistency
+                curId: curr ? curr.id : null, 
                 headId: head ? head.id : null,
                 // Explicit values for the Variables Panel
                 list1Val: list1 ? `Node ${list1.val}` : "NULL",
@@ -283,28 +282,34 @@
             if (list1.val < list2.val) {
                 // Line 8 (Java): curr.next = list1
                 const curNodeInMap = allNodesMap.get(curr.id);
-                if (curNodeInMap) curNodeInMap.visNextId = list1.id;
+                if (curNodeInMap) curNodeInMap.mergedNextId = list1.id; // Record the NEW green link
                 
                 chosenNode = list1;
-                list1 = allNodesMap.get(list1.visNextId) || null; // Move list1 pointer
+                
+                // Advance list1 pointer using its originalNextId
+                const nextList1 = allNodesMap.get(list1.originalNextId) || null; 
+                list1 = nextList1; 
 
-                save(`L1.val (${chosenNode.val}) < L2.val. Attach L1 to curr.next.`, 6);
+                save(`L1.val (${chosenNode.val}) < L2.val. Set curr.next = L1 (Green Link).`, 6);
                 
                 // Line 9 (Java): list1 = list1.next
-                save(`Advance list1 pointer to next node.`, 7);
+                save(`Advance list1 pointer to next node (L1's original next).`, 7);
 
             } else { // Handles list2.val <= list1.val
                 // Line 12 (Java): curr.next = list2
                 const curNodeInMap = allNodesMap.get(curr.id);
-                if (curNodeInMap) curNodeInMap.visNextId = list2.id;
+                if (curNodeInMap) curNodeInMap.mergedNextId = list2.id; // Record the NEW green link
                 
                 chosenNode = list2;
-                list2 = allNodesMap.get(list2.visNextId) || null; // Move list2 pointer
+                
+                // Advance list2 pointer using its originalNextId
+                const nextList2 = allNodesMap.get(list2.originalNextId) || null; 
+                list2 = nextList2; 
 
-                save(`L2.val (${chosenNode.val}) <= L1.val. Attach L2 to curr.next.`, 9);
+                save(`L2.val (${chosenNode.val}) <= L1.val. Set curr.next = L2 (Green Link).`, 9);
                 
                 // Line 13 (Java): list2 = list2.next
-                save(`Advance list2 pointer to next node.`, 10);
+                save(`Advance list2 pointer to next node (L2's original next).`, 10);
             }
             
             // Line 15 (Java): curr = curr.next
@@ -317,10 +322,10 @@
         const remaining = list1 || list2;
         if (remaining) {
             const curNodeInMap = allNodesMap.get(curr.id);
-            if (curNodeInMap) curNodeInMap.visNextId = remaining.id;
+            if (curNodeInMap) curNodeInMap.mergedNextId = remaining.id; // Record final link
         }
         
-        save(`Attach remaining list to curr.next.`, 13);
+        save(`Attach remaining list to curr.next (Green Link).`, 13);
 
         // Line 20 (Java): return head.next;
         save(`Return head.next (the start of the merged list). Merging complete.`, 14);
@@ -335,15 +340,19 @@
 
     // Define Arrowhead markers
     svg.append('defs').html(`
-        <marker id="arrow-l1" markerWidth="10" markerHeight="10" refX="19" refY="5" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,10 L10,5 z" fill="#4f46e5" />
-        </marker>
-        <marker id="arrow-l2" markerWidth="10" markerHeight="10" refX="19" refY="5" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,10 L10,5 z" fill="#f59e0b" />
-        </marker>
+        <!-- Merged Link -->
         <marker id="arrow-merged" markerWidth="10" markerHeight="10" refX="19" refY="5" orient="auto" markerUnits="strokeWidth">
             <path d="M0,0 L0,10 L10,5 z" fill="#10b981" />
         </marker>
+        <!-- Internal L1 Link -->
+        <marker id="arrow-internal-l1" markerWidth="10" markerHeight="10" refX="19" refY="5" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,10 L10,5 z" fill="#93c5fd" />
+        </marker>
+        <!-- Internal L2 Link -->
+        <marker id="arrow-internal-l2" markerWidth="10" markerHeight="10" refX="19" refY="5" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,10 L10,5 z" fill="#fdba74" />
+        </marker>
+        <!-- NULL Link -->
         <marker id="null-marker" markerWidth="10" markerHeight="10" refX="19" refY="5" orient="auto" markerUnits="strokeWidth">
             <path d="M0,0 L0,10 L10,5 z" fill="#ef4444" />
         </marker>
@@ -358,12 +367,12 @@ class Solution {
 
         while (list1 != null && list2 != null) {
             if (list1.val < list2.val) {
-                curr.next = list1;
-                list1 = list1.next;
+                curr.next = list1; // NEW LINK (Green)
+                list1 = list1.next; // Uses L1's original internal link
             }
             else {
-                curr.next = list2;
-                list2 = list2.next;
+                curr.next = list2; // NEW LINK (Green)
+                list2 = list2.next; // Uses L2's original internal link
             }
             curr = curr.next;
         }
@@ -410,6 +419,50 @@ class Solution {
         d3.select("#var-head .var-val").text(s.headVal).style("color", s.headId !== null ? "#ec4899" : "#9ca3af");
     }
 
+    function drawLink(sourcePos, targetPos, linkClass, linkStroke, strokeWidth, markerId, isNull = false) {
+        if (isNull) {
+            const x1 = sourcePos.x + NODE_RADIUS;
+            const x2 = x1 + 40;
+            
+            mainGroup.append("path")
+                .attr("class", `link-path null-link`)
+                .attr("d", `M ${x1} ${sourcePos.y} L ${x2} ${sourcePos.y}`)
+                .attr("marker-end", "url(#null-marker)");
+
+            mainGroup.append("text")
+                .attr("x", x2 + 10)
+                .attr("y", sourcePos.y + 4)
+                .attr("text-anchor", "start")
+                .attr("font-weight", "bold")
+                .attr("fill", "#ef4444")
+                .attr("font-size", "12px")
+                .text("NULL");
+        } else if (targetPos) {
+            const x1 = sourcePos.x;
+            const y1 = sourcePos.y;
+            const x2 = targetPos.x;
+            const y2 = targetPos.y;
+
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const angle = Math.atan2(dy, dx);
+            const startX_adj = x1 + Math.cos(angle) * NODE_RADIUS;
+            const startY_adj = y1 + Math.sin(angle) * NODE_RADIUS;
+            
+            const pad = NODE_RADIUS + (strokeWidth > 2 ? 6 : 5); 
+            const endX_adj = x2 - Math.cos(angle) * pad;
+            const endY_adj = y2 - Math.sin(angle) * pad;
+            
+            mainGroup.append("path")
+                .attr("class", `link-path ${linkClass}`)
+                .attr("stroke", linkStroke)
+                .attr("stroke-width", strokeWidth)
+                .attr("d", `M ${startX_adj} ${startY_adj} L ${endX_adj} ${endY_adj}`)
+                .attr("marker-end", markerId);
+        }
+    }
+
+
     function renderList(listData, list1Id, list2Id, curId, headId) {
         mainGroup.selectAll("*").remove(); 
         
@@ -420,15 +473,13 @@ class Solution {
             return;
         }
 
-        const totalNodeSlots = maxListLength + 1; // +1 for the dummy node slot
+        const totalNodeSlots = maxListLength + 1; 
         const totalWidth = totalNodeSlots * NODE_SPACING;
         const containerWidth = svg.node().getBoundingClientRect().width;
         
-        // Define X where the first *content* node (index 0 of L1 or L2) should start.
         const INPUT_LIST_START_X = Math.max(80, (containerWidth / 2) - (totalWidth / 2) + NODE_SPACING);
         svg.attr("width", Math.max(containerWidth, totalWidth + 150));
 
-        // Define the X position for the labels 
         const LABEL_X = INPUT_LIST_START_X - NODE_SPACING - 30;
 
         // Draw Row Labels
@@ -445,11 +496,9 @@ class Solution {
             let x;
 
             if (node.isDummy) {
-                // Dummy Head 'H' is always at the fixed left X and the new middle Y
                 y = Y_H_NODE; 
                 x = INPUT_LIST_START_X - NODE_SPACING;
             } else {
-                // Input list nodes (L1/L2)
                 y = ROW_Y_MAP[node.listIndex];
                 const indexInRow = parseInt(id.split('-')[2]);
                 x = INPUT_LIST_START_X + indexInRow * NODE_SPACING;
@@ -462,77 +511,33 @@ class Solution {
         // --- 1. Draw Links ---
         listData.forEach(d => {
             const sourcePos = getNodePos(d.id);
-            const targetPos = getNodePos(d.visNextId);
-            
-            if (sourcePos) {
-                // Links originating from the dummy node or curr pointer are "merged" links
-                const isMergedLink = d.listIndex === 3 || (d.id === curId); 
+            if (!sourcePos) return;
+
+            // A. Draw the original internal link (L1: Blue, L2: Orange - Always visible if it exists)
+            if (d.originalNextId !== null) {
+                const originalTargetPos = getNodePos(d.originalNextId);
+                const linkStroke = d.listIndex === 1 ? '#93c5fd' : '#fdba74';
+                const markerId = d.listIndex === 1 ? "url(#arrow-internal-l1)" : "url(#arrow-internal-l2)";
+                const linkClass = d.listIndex === 1 ? "internal-l1" : "internal-l2";
                 
-                if (targetPos) {
-                    // Calculate path (can be diagonal)
-                    const x1 = sourcePos.x;
-                    const y1 = sourcePos.y;
-                    const x2 = targetPos.x;
-                    const y2 = targetPos.y;
-
-                    // Calculate point where link leaves the source node boundary
-                    const dx = x2 - x1;
-                    const dy = y2 - y1;
-                    const angle = Math.atan2(dy, dx);
-                    const startX_adj = x1 + Math.cos(angle) * NODE_RADIUS;
-                    const startY_adj = y1 + Math.sin(angle) * NODE_RADIUS;
-                    
-                    // Calculate point where link enters the target node boundary (to stop the arrow head correctly)
-                    const pad = NODE_RADIUS + 5; 
-                    const endX_adj = x2 - Math.cos(angle) * pad;
-                    const endY_adj = y2 - Math.sin(angle) * pad;
-                    
-                    let markerId, linkClass, linkStroke;
-                    if (isMergedLink) {
-                        markerId = "url(#arrow-merged)";
-                        linkClass = "merged";
-                        linkStroke = '#10b981';
-                    } else if (sourcePos.node.listIndex === 1) {
-                        markerId = "url(#arrow-l1)";
-                        linkClass = "";
-                        linkStroke = '#4f46e5';
-                    } else { // listIndex === 2
-                        markerId = "url(#arrow-l2)";
-                        linkClass = "";
-                        linkStroke = '#f59e0b';
-                    }
-
-                    mainGroup.append("path")
-                        .attr("class", `link-path ${linkClass}`)
-                        .attr("stroke", linkStroke)
-                        .attr("d", `M ${startX_adj} ${startY_adj} L ${endX_adj} ${endY_adj}`)
-                        .attr("marker-end", markerId);
-
-                } else if (d.visNextId === null) {
-                    // Null Link (always to the right if it's the end of a chain)
-                    const x1 = sourcePos.x + NODE_RADIUS;
-                    const x2 = x1 + 40;
-                    
-                    mainGroup.append("path")
-                        .attr("class", `link-path null-link`)
-                        .attr("d", `M ${x1} ${sourcePos.y} L ${x2} ${sourcePos.y}`)
-                        .attr("marker-end", "url(#null-marker)");
-
-                    mainGroup.append("text")
-                        .attr("x", x2 + 10)
-                        .attr("y", sourcePos.y + 4)
-                        .attr("text-anchor", "start")
-                        .attr("font-weight", "bold")
-                        .attr("fill", "#ef4444")
-                        .attr("font-size", "12px")
-                        .text("NULL");
-                }
+                drawLink(sourcePos, originalTargetPos, linkClass, linkStroke, 1.5, markerId);
+            }
+            
+            // B. Draw the merged link (Green, Thick - Visible if the link was ever created)
+            if (d.mergedNextId !== null) {
+                const mergedTargetPos = getNodePos(d.mergedNextId);
+                drawLink(sourcePos, mergedTargetPos, "merged", '#10b981', 3, "url(#arrow-merged)");
+            } 
+            
+            // C. Draw NULL pointer for 'curr' if it's the end of the chain being built
+            else if (d.id === curId && d.mergedNextId === null) {
+                drawLink(sourcePos, null, "null-link", '#ef4444', 2, "url(#null-marker)", true);
             }
         });
 
         // --- 2. Draw Nodes ---
         const nodes = mainGroup.selectAll(".list-node")
-            .data(listData.filter(d => !d.isDummy), d => d.id); // Draw all non-dummy nodes
+            .data(listData.filter(d => !d.isDummy), d => d.id); 
 
         const nodesEnter = nodes.enter().append("g")
             .attr("class", "list-node")
@@ -623,7 +628,8 @@ class Solution {
     }
 
     function updateUI() {
-        if (!snapshots[currentStepIndex]) return;
+        if (!snapshots[currentStepIndex]) return; 
+        
         const s = snapshots[currentStepIndex];
         
         d3.select("#status-text").text(s.message);
