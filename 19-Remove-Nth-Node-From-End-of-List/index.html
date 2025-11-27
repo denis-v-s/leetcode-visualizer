@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeetCode 19: Remove Nth Node From End of List</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .node-circle {
+            fill: #ffffff;
+            stroke: #4f46e5;
+            stroke-width: 2.5px;
+            transition: all 0.3s ease-out;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+        }
+        .dummy-circle {
+            fill: #fef3c7; /* Light Yellow */
+            stroke: #d97706; /* Darker Orange */
+            stroke-width: 2.5px;
+        }
+        .node-text {
+            font-size: 16px;
+            font-weight: 700;
+            fill: #1f2937;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            pointer-events: none;
+        }
+        .dummy-text {
+            fill: #d97706;
+        }
+        .pointer-text {
+            font-size: 12px;
+            font-weight: 700;
+            text-anchor: middle;
+            pointer-events: none;
+            transition: all 0.3s ease-out;
+            text-shadow: 0px 1px 2px white;
+        }
+        .link-path {
+            fill: none;
+            stroke: #93c5fd;
+            stroke-width: 2px;
+            transition: stroke 0.3s, opacity 0.3s;
+            stroke-linecap: round;
+        }
+        .link-removed {
+            opacity: 0.2;
+            stroke: #ef4444;
+            stroke-dasharray: 4;
+        }
+        
+        /* New styling for the explicitly removed node */
+        .node-removed .node-circle {
+            opacity: 0.2;
+            stroke: #ef4444;
+            stroke-dasharray: 4;
+        }
+        .node-removed .node-text {
+            fill: #ef4444;
+            opacity: 0.3;
+            text-decoration: line-through;
+        }
+        
+        #visualization-container {
+            position: relative;
+            width: 100%;
+            max-width: 1200px;
+            min-height: 250px; 
+            margin-top: 20px;
+            overflow-x: auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+        
+        .var-box {
+            transition: all 0.3s;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="max-w-5xl w-full flex flex-col items-center">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">LC 19: Remove Nth Node From End of List</h1>
+        <h3 class="text-lg text-gray-600 mb-6">Two-Pointer Approach with Dummy Node</h3>
+
+        <!-- Controls -->
+        <div class="controls bg-white p-4 sm:p-6 rounded-xl shadow-lg flex flex-wrap gap-4 items-center justify-center border border-gray-100 w-full">
+            <div class="flex items-center gap-2">
+                <label class="font-semibold text-gray-700">List:</label>
+                <select id="test-case-select" class="p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150">
+                    <option value="0">[1, 2, 3, 4, 5]</option>
+                    <option value="1">[1, 2]</option>
+                    <option value="2">[1]</option>
+                </select>
+            </div>
+            <div class="flex items-center gap-2">
+                <label class="font-semibold text-gray-700">N (From End):</label>
+                <select id="n-select" class="p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150">
+                    <option value="2">2</option>
+                    <option value="5">5</option>
+                    <option value="1">1</option>
+                </select>
+            </div>
+            
+            <div class="hidden sm:block w-px h-8 bg-gray-200"></div>
+
+            <div class="flex gap-2">
+                <button id="btn-prev" class="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition disabled:bg-gray-400">
+                    &larr; Prev
+                </button>
+                <button id="btn-play" class="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition disabled:bg-gray-400">
+                    Auto Play
+                </button>
+                <button id="btn-next" class="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition disabled:bg-gray-400">
+                    Next &rarr;
+                </button>
+                <button id="btn-reset" class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg shadow-md hover:bg-gray-600 transition">
+                    Reset
+                </button>
+            </div>
+        </div>
+
+        <!-- Variable Watcher -->
+        <div class="grid grid-cols-4 gap-4 w-full max-w-5xl mt-6">
+            <div id="var-dummy" class="var-box bg-white p-3 rounded-lg shadow border-l-4 border-yellow-600 flex flex-col items-center">
+                <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">dummy</span>
+                <span class="var-val font-mono text-lg font-bold text-gray-800">0</span>
+            </div>
+            <div id="var-fast" class="var-box bg-white p-3 rounded-lg shadow border-l-4 border-blue-500 flex flex-col items-center">
+                <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">fast</span>
+                <span class="var-val font-mono text-lg font-bold text-gray-800">NULL</span>
+            </div>
+            <div id="var-slow" class="var-box bg-white p-3 rounded-lg shadow border-l-4 border-indigo-500 flex flex-col items-center">
+                <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">slow</span>
+                <span class="var-val font-mono text-lg font-bold text-gray-800">NULL</span>
+            </div>
+            <div id="var-n" class="var-box bg-white p-3 rounded-lg shadow border-l-4 border-red-500 flex flex-col items-center">
+                <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">N</span>
+                <span class="var-val font-mono text-lg font-bold text-red-500">2</span>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div id="status-bar" class="w-full max-w-5xl mt-4 p-3 rounded-lg text-center font-mono text-white text-sm shadow-md bg-gray-700 transition-all duration-300">
+            <span id="status-text">Ready</span>
+        </div>
+        
+        <!-- Visualization -->
+        <div id="visualization-container">
+            <svg id="list-svg" width="100%" height="220"></svg>
+        </div>
+        
+        <!-- Code Display -->
+        <div class="w-full max-w-5xl mt-6 bg-gray-800 p-4 rounded-xl shadow-xl">
+            <pre id="code-display" class="text-gray-200 text-sm overflow-x-auto"></pre>
+        </div>
+    </div>
+
+<script>
+    // --- Configuration ---
+    const NODE_RADIUS = 20;
+    const NODE_SPACING = 80;
+    const Y_LIST = 100; // Center Vertically
+    
+    // Pointer offsets for clear stacking
+    const POINTER_OFFSET_TOP = 45; 
+    const POINTER_STEP = 22; 
+
+    const ANIMATION_DURATION = 400; 
+    
+    // --- State Management ---
+    let snapshots = [];
+    let currentStepIndex = 0;
+    let autoPlayInterval = null;
+    let currentN = 2;
+    let currentList = [1, 2, 3, 4, 5];
+
+    // --- Data Structure ---
+    class ListNode {
+        constructor(val, id, nextId = null, isDummy = false) {
+            this.val = val;
+            this.id = id;
+            this.nextId = nextId; 
+            this.isDummy = isDummy;
+        }
+    }
+
+    // --- Test Cases ---
+    const testCases = {
+        '0': [1, 2, 3, 4, 5],
+        '1': [1, 2],
+        '2': [1]
+    };
+    
+    // Define Arrowhead markers
+    d3.select("svg").append('defs').html(`
+        <marker id="arrow-current" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0 L0,10 L10,5 z" fill="#93c5fd" />
+        </marker>
+        <marker id="arrow-removed" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0 L0,10 L10,5 z" fill="#ef4444" />
+        </marker>
+    `);
+
+    // --- Logic ---
+
+    function arrayToLists(arr) {
+        if (arr.length === 0) return { head: null, allNodes: [] };
+
+        const nodes = [];
+        let head = null;
+
+        arr.forEach((val, index) => {
+            const id = `node-${index}`;
+            const nextId = (index < arr.length - 1) ? `node-${index + 1}` : null;
+            const newNode = new ListNode(val, id, nextId);
+            
+            if (index === 0) { head = newNode; } 
+            nodes.push(newNode);
+        });
+        
+        // Add dummy node
+        const dummy = new ListNode(0, 'dummy', head ? head.id : null, true);
+        nodes.unshift(dummy);
+
+        return { head: dummy, allNodes: nodes };
+    }
+    
+    function generateSnapshots(arr, n) {
+        let history = [];
+        let { head: dummyNode, allNodes: initialNodes } = arrayToLists(arr);
+        let currentNextMap = new Map(initialNodes.map(n => [n.id, n.nextId]));
+        
+        const getIdVal = (id) => {
+            if (!id) return "NULL";
+            const node = initialNodes.find(n => n.id === id);
+            return node ? (node.isDummy ? "Dummy" : `Node ${node.val}`) : "NULL";
+        };
+
+        let fast = dummyNode;
+        let slow = dummyNode;
+        let targetId = null; // Track the node ID to be removed
+
+        const save = (msg, line, removedNodeId = null) => {
+            history.push({
+                list: initialNodes.map(n => ({ val: n.val, id: n.id, isDummy: n.isDummy })),
+                nextMap: new Map(currentNextMap), 
+                fastId: fast ? fast.id : null,
+                slowId: slow ? slow.id : null,
+                
+                fastVal: getIdVal(fast ? fast.id : null),
+                slowVal: getIdVal(slow ? slow.id : null),
+                
+                removedLink: null, 
+                removedNodeId: removedNodeId, // Now tracking the removed node ID
+                message: msg,
+                line: line
+            });
+        };
+        
+        // Corrected line numbers based on CODE_SNIPPET
+        
+        // Lines 3, 4, 5
+        save(`Initial state: Created a dummy node (0) pointing to head.`, 3); 
+        save(`Initialize fast pointer to the dummy node.`, 4);
+        save(`Initialize slow pointer to the dummy node.`, 5);
+
+        // --- Phase 1: Establish Gap (n+1 steps) ---
+        save(`Phase 1: Move 'fast' pointer ${n} + 1 = ${n + 1} steps ahead. This establishes the N-node gap.`, 7); // Comment line 7
+        save(`Starting for loop (Line 8).`, 8); // For loop start
+        
+        for (let i = 0; i <= n; i++) {
+            if (fast && currentNextMap.get(fast.id)) {
+                fast = initialNodes.find(n => n.id === currentNextMap.get(fast.id));
+                // Highlight line 9 (fast = fast.next;) on every move
+                save(`Move fast one step (Step ${i+1}/${n+1}). fast is now at ${getIdVal(fast.id)}.`, 9); 
+            } else if (i <= n) {
+                save(`Cannot move fast further; list is too short (fast became NULL).`, 9);
+                break;
+            }
+        }
+        
+        // Check if removal is impossible
+        if (!fast && arr.length < n) {
+             save(`List length (${arr.length}) is less than N (${n}). Cannot remove Nth node from end.`, -1);
+             return history;
+        }
+
+        save(`Gap established. fast is now ${getIdVal(fast ? fast.id : null)}.`, 10); // End of for loop block
+        
+        // --- Phase 2: Traverse to End ---
+        save(`Phase 2: Move fast and slow forward one step at a time until fast hits NULL.`, 12); // Comment line 12
+        
+        let phase2Iteration = 0;
+        while (fast) {
+            phase2Iteration++;
+            
+            // Highlight while condition check (Line 13)
+            save(`Loop ${phase2Iteration}: Check while condition (fast != null). Condition is true.`, 13);
+            
+            // Step 1: Execute fast = fast.next (Line 14)
+            const oldFastId = fast.id;
+            fast = initialNodes.find(n => n.id === currentNextMap.get(fast.id));
+            save(`Loop ${phase2Iteration} (Line 14): Moving 'fast' from ${getIdVal(oldFastId)} to ${getIdVal(fast ? fast.id : null)}.`, 14); 
+
+            // Step 2: Execute slow = slow.next (Line 15)
+            const oldSlowId = slow.id;
+            slow = initialNodes.find(n => n.id === currentNextMap.get(slow.id));
+            save(`Loop ${phase2Iteration} (Line 15): Moving 'slow' from ${getIdVal(oldSlowId)} to ${getIdVal(slow.id)}.`, 15);
+        }
+        
+        save(`Loop finished (Line 13 failed). fast is now NULL. slow is correctly positioned at the node *before* the target node.`, 13); 
+
+
+        if (slow && currentNextMap.get(slow.id)) {
+            // --- Phase 3: Removal ---
+            targetId = currentNextMap.get(slow.id); // Set targetId
+            const targetNextId = currentNextMap.get(targetId);
+            
+            // Step A: Setup for removal - Highlight comment (Line 18)
+            save(`fast is NULL. slow is positioned before the node to be removed (Node ${getIdVal(targetId)}). Ready for removal.`, 18); 
+
+            // Step B: Execute removal and update state (Line 19)
+            currentNextMap.set(slow.id, targetNextId);
+            // Save the final removal state, marking the node as removed and highlighting the action line
+            save(`Phase 3: Executing slow.next = slow.next.next. The link is re-routed, skipping Node ${getIdVal(targetId)}.`, 19, targetId);
+        } else {
+             save(`List is empty or error occurred (Check logic if slow is null here).`, -1);
+        }
+
+        // --- Phase 4: Return ---
+        // Pass the targetId to the final step so the removal visual persists.
+        save(`Operation complete. Return dummy.next, which is the new head of the list.`, 21, targetId);
+        
+        return history;
+    }
+
+
+    // --- D3 Visualization ---
+
+    const svg = d3.select("#list-svg");
+    const mainGroup = svg.append("g").attr("id", "main-group");
+
+    // Code Snippet (Java)
+    const CODE_SNIPPET = `
+class Solution {
+    public ListNode removeNthFromEnd(ListNode head, int n) {
+        ListNode dummy = new ListNode(0, head); 
+        ListNode fast = dummy; 
+        ListNode slow = dummy; 
+
+        // Move fast ahead by n+1, so slow will end up at the node before the target
+        for (int i = 0; i <= n; i++) { 
+            fast = fast.next; 
+        } 
+
+        // Move forward until fast reaches the end
+        while (fast != null) { 
+            fast = fast.next; 
+            slow = slow.next; 
+        } 
+
+        // Remove the node
+        slow.next = slow.next.next; 
+
+        return dummy.next;
+    }
+}
+`.trim();
+
+    function renderCode(line) {
+        const lines = CODE_SNIPPET.split('\n');
+        const highlightedIndex = line > 0 ? line - 1 : -1;
+        const htmlContent = lines.map((l, i) => {
+            const isHighlighted = i === highlightedIndex;
+            const color = isHighlighted ? 'text-yellow-300 bg-gray-700' : 'text-gray-200';
+            return `<div class="transition-all duration-300 ${color} ${isHighlighted ? 'font-semibold' : ''} px-2 rounded-md">${l}</div>`;
+        }).join('');
+        d3.select("#code-display").html(htmlContent);
+    }
+
+    function updateVariables(s) {
+        const setVar = (id, val, hasId) => {
+            d3.select(`#var-${id} .var-val`).text(val).style("color", hasId ? "#1f2937" : "#9ca3af");
+        };
+        setVar('fast', s.fastVal, s.fastId);
+        setVar('slow', s.slowVal, s.slowId);
+        d3.select('#var-dummy .var-val').text('0 (Node 0)');
+        d3.select('#var-n .var-val').text(currentN);
+    }
+    
+    function drawLink(sourcePos, targetPos, linkClass, strokeWidth, markerId, isNull = false) {
+        
+        if (isNull) {
+            const x1 = sourcePos.x + NODE_RADIUS;
+            const x2 = x1 + 30;
+            mainGroup.append("path")
+                .attr("class", `link-path link-removed`)
+                .attr("d", `M ${x1} ${sourcePos.y} L ${x2} ${sourcePos.y}`)
+                .attr("marker-end", "url(#arrow-removed)");
+            mainGroup.append("text")
+                .attr("x", x2 + 5).attr("y", sourcePos.y + 4)
+                .attr("text-anchor", "start").attr("font-weight", "bold").attr("fill", "#ef4444")
+                .attr("font-size", "12px").text("NULL");
+        } else if (targetPos) {
+            const x1 = sourcePos.x;
+            const y1 = sourcePos.y;
+            const x2 = targetPos.x;
+            const y2 = targetPos.y;
+
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            const angle = Math.atan2(dy, dx);
+            
+            // End point needs to account for the arrowhead size
+            const markerSpacing = 10;
+            const endX_adj = x2 - Math.cos(angle) * (NODE_RADIUS + markerSpacing);
+            const endY_adj = y2 - Math.sin(angle) * (NODE_RADIUS + markerSpacing);
+            const startX_adj = x1 + Math.cos(angle) * NODE_RADIUS;
+            const startY_adj = y1 + Math.sin(angle) * NODE_RADIUS;
+
+            mainGroup.append("path")
+                .attr("class", `link-path ${linkClass}`)
+                .attr("stroke-width", strokeWidth)
+                .attr("d", `M ${startX_adj} ${startY_adj} L ${endX_adj} ${endY_adj}`)
+                .attr("marker-end", markerId);
+        }
+    }
+
+
+    function renderList(listData, nextMap, activePointerIds) {
+        mainGroup.selectAll("*").remove(); 
+        
+        const totalNodeSlots = listData.length; 
+        const totalWidth = (totalNodeSlots - 1) * NODE_SPACING;
+        const containerWidth = svg.node().getBoundingClientRect().width;
+        const START_X = Math.max(80, (containerWidth / 2) - (totalWidth / 2));
+        svg.attr("width", Math.max(containerWidth, totalWidth + 150));
+        
+        const s = snapshots[currentStepIndex];
+        const removedNodeId = s ? s.removedNodeId : null; // Get removed node ID
+
+        const getNodePos = (id) => {
+            const node = listData.find(d => d.id === id);
+            if (!node) return null;
+            // The dummy node (id='dummy') is at index 0
+            const index = node.isDummy ? 0 : parseInt(id.split('-')[1]) + 1;
+            const x = START_X + index * NODE_SPACING;
+            return { x, y: Y_LIST, node };
+        };
+        
+        // Draw Links first
+        for (const [sourceId, targetId] of nextMap.entries()) {
+            const sourcePos = getNodePos(sourceId);
+            const targetPos = getNodePos(targetId);
+            if (!sourcePos) continue;
+
+            let linkClass = "current"; 
+            let markerId = "url(#arrow-current)";
+            
+            // Check if this link was the one skipped/changed in the final step
+            const isRemovedLink = s && s.removedLink && s.removedLink.source === sourceId && s.removedLink.target === targetId;
+
+            if (isRemovedLink) {
+                linkClass = "link-removed";
+                markerId = "url(#arrow-removed)";
+            }
+
+            if (targetId === null) {
+                drawLink(sourcePos, null, linkClass, 2, markerId, true);
+            } else {
+                drawLink(sourcePos, targetPos, linkClass, 2, markerId, false);
+            }
+        }
+
+        // Draw Nodes
+        const nodes = mainGroup.selectAll(".list-node").data(listData, d => d.id); 
+        const nodesEnter = nodes.enter().append("g")
+            .attr("class", d => `list-node ${d.id === removedNodeId ? 'node-removed' : ''}`) // Apply removed class here
+            .attr("transform", d => `translate(${getNodePos(d.id).x}, ${Y_LIST})`);
+
+        nodesEnter.append("circle")
+            .attr("r", NODE_RADIUS)
+            .attr("class", d => d.isDummy ? "node-circle dummy-circle" : "node-circle");
+
+        nodesEnter.append("text")
+            .attr("class", d => d.isDummy ? "node-text dummy-text" : "node-text")
+            .text(d => d.isDummy ? d.val : d.val);
+            
+        nodes.exit().remove();
+        
+        // Draw Pointers
+        drawPointers(activePointerIds, getNodePos);
+    }
+    
+    function drawPointers(activePointerIds, getNodePos) {
+        const pointers = [
+            { id: activePointerIds.fastId, label: 'fast', color: '#3b82f6' },
+            { id: activePointerIds.slowId, label: 'slow', color: '#4f46e5' }
+        ].filter(p => p.id !== null);
+
+        const pointersByNode = new Map();
+        pointers.forEach(p => {
+            if (!pointersByNode.has(p.id)) pointersByNode.set(p.id, []);
+            pointersByNode.get(p.id).push(p);
+        });
+
+        pointersByNode.forEach((pointers, id) => {
+            const pos = getNodePos(id);
+            if (!pos) return;
+
+            // Sort pointers to ensure consistent stacking order
+            pointers.sort((a, b) => a.label.localeCompare(b.label));
+            
+            pointers.forEach((p, index) => {
+                const finalOffset = -POINTER_OFFSET_TOP - index * POINTER_STEP; 
+                mainGroup.append("text")
+                    .attr("x", pos.x).attr("y", pos.y + finalOffset + 10)
+                    .attr("class", "pointer-text").attr("fill", p.color).text(p.label);
+                mainGroup.append("line")
+                    .attr("x1", pos.x).attr("y1", pos.y + finalOffset + 5) 
+                    .attr("x2", pos.x).attr("y2", pos.y - NODE_RADIUS - 3)
+                    .attr("stroke", p.color).attr("stroke-width", 2);
+            });
+        });
+    }
+
+    function loadTestCase() {
+        stopAutoPlay();
+        
+        const listIndex = document.getElementById("test-case-select").value;
+        const nValue = parseInt(document.getElementById("n-select").value);
+        currentList = testCases[listIndex];
+        currentN = nValue;
+
+        // Re-generate N dropdown options based on the list size
+        const nSelect = document.getElementById("n-select");
+        nSelect.innerHTML = '';
+        for(let i = 1; i <= currentList.length; i++) {
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = i;
+            if (i === currentN) option.selected = true;
+            nSelect.appendChild(option);
+        }
+        // If the selected N is out of range, default to the largest possible
+        if (currentN > currentList.length) {
+            currentN = currentList.length;
+            nSelect.value = currentN;
+        }
+
+
+        d3.select('#var-n .var-val').text(currentN);
+        snapshots = generateSnapshots(currentList, currentN);
+        currentStepIndex = 0;
+        updateUI();
+    }
+    
+    // Attach N change listener after the element exists
+    document.getElementById("n-select").addEventListener("change", loadTestCase);
+
+
+    function updateUI() {
+        if (!snapshots[currentStepIndex]) return; 
+        const s = snapshots[currentStepIndex];
+        d3.select("#status-text").text(s.message);
+        
+        renderList(s.list, s.nextMap, {
+            fastId: s.fastId, slowId: s.slowId
+        });
+        updateVariables(s);
+        renderCode(s.line);
+        
+        document.getElementById("btn-prev").disabled = currentStepIndex === 0;
+        document.getElementById("btn-next").disabled = currentStepIndex === snapshots.length - 1;
+        
+        if (currentStepIndex === snapshots.length - 1) {
+            d3.select("#status-bar").style('background-color', '#10b981');
+        } else {
+            d3.select("#status-bar").style('background-color', '#374151');
+        }
+    }
+
+    function nextStep() {
+        if (currentStepIndex < snapshots.length - 1) {
+            currentStepIndex++;
+            updateUI();
+        } else { stopAutoPlay(); }
+    }
+
+    function prevStep() {
+        if (currentStepIndex > 0) {
+            currentStepIndex--;
+            updateUI();
+        }
+    }
+
+    function toggleAutoPlay() {
+        if (autoPlayInterval) {
+            stopAutoPlay();
+        } else {
+            document.getElementById("btn-play").textContent = "Pause";
+            if (currentStepIndex === snapshots.length - 1) {
+                currentStepIndex = 0;
+                updateUI();
+            }
+            autoPlayInterval = setInterval(nextStep, ANIMATION_DURATION + 500);
+        }
+    }
+
+    function stopAutoPlay() {
+        clearInterval(autoPlayInterval);
+        autoPlayInterval = null;
+        document.getElementById("btn-play").textContent = "Auto Play";
+    }
+
+    document.getElementById("test-case-select").addEventListener("change", loadTestCase);
+    document.getElementById("btn-next").addEventListener("click", () => { stopAutoPlay(); nextStep(); });
+    document.getElementById("btn-prev").addEventListener("click", () => { stopAutoPlay(); prevStep(); });
+    document.getElementById("btn-reset").addEventListener("click", () => { stopAutoPlay(); currentStepIndex = 0; updateUI(); });
+    document.getElementById("btn-play").addEventListener("click", toggleAutoPlay);
+
+    // Initial load
+    loadTestCase(); 
+</script>
+</body>
+</html>
