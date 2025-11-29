@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LC 875: Koko Eating Bananas Visualization</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Roboto+Mono:wght@400;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3ffec; /* Light Greenish background */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 1000px;
+        }
+        
+        /* Custom UI Styles */
+        .panel {
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.05);
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .text-mono {
+            font-family: 'Roboto Mono', monospace;
+        }
+        .bs-pointer {
+            border: 2px solid;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            transition: all 0.3s ease;
+        }
+        .i-pointer { border-color: #10b981; background-color: #ecfdf5; color: #065f46; } /* Green */
+        .j-pointer { border-color: #f97316; background-color: #fff7ed; color: #9a3412; } /* Orange */
+        .k-pointer { border-color: #3b82f6; background-color: #eff6ff; color: #1d4ed8; } /* Blue */
+
+        /* Log Styles */
+        .log-entry {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 8px;
+            border-bottom: 1px dashed #e5e7eb;
+            font-size: 0.9rem;
+        }
+        .log-entry:last-child {
+            border-bottom: none;
+            font-weight: 600;
+        }
+        .log-highlight {
+            background-color: #fef3c7;
+            border-radius: 4px;
+        }
+        
+        .code-line {
+            padding-left: 1rem;
+            white-space: pre;
+        }
+        .code-highlight {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #ffeb3b;
+            font-weight: 700;
+            border-left: 3px solid #ffeb3b;
+        }
+
+        /* History Table Styles */
+        #k-history-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        #k-history-table th, #k-history-table td {
+            padding: 6px 4px;
+            text-align: center;
+            border: 1px solid #e5e7eb;
+        }
+        #k-history-table th {
+            background-color: #f3f4f6;
+            color: #4b5563;
+        }
+        .history-k-td {
+            font-weight: 600;
+        }
+        .history-result-td.feasible {
+            background-color: #d1fae5; /* Green light */
+            color: #065f46;
+        }
+        .history-result-td.slow {
+            background-color: #fee2e2; /* Red light */
+            color: #991b1b;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container flex flex-col items-center">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">LC 875: Koko Eating Bananas</h1>
+        <h3 class="text-lg text-gray-600 mb-6">Binary Search Visualization (Min Speed)</h3>
+
+        <!-- Controls and Inputs -->
+        <div class="controls panel flex flex-wrap gap-4 items-center justify-center border border-gray-100 w-full mb-6">
+            <div class="flex items-center gap-2">
+                <label class="font-semibold text-gray-700">Test Case:</label>
+                <select id="test-case-select" class="p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150">
+                    <option value="0">[30, 11, 23, 4, 20], H=6 (Result: 23)</option>
+                    <option value="1">[3, 6, 7, 11], H=8 (Result: 4)</option>
+                </select>
+            </div>
+            
+            <div class="hidden sm:block w-px h-8 bg-gray-200"></div>
+
+            <div class="flex gap-2">
+                <button id="btn-prev" class="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition disabled:bg-gray-400">
+                    &larr; Prev
+                </button>
+                <button id="btn-play" class="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition disabled:bg-gray-400">
+                    Auto Play
+                </button>
+                <button id="btn-next" class="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition disabled:bg-gray-400">
+                    Next Step &rarr;
+                </button>
+                <button id="btn-reset" class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg shadow-md hover:bg-gray-600 transition">
+                    Reset
+                </button>
+            </div>
+        </div>
+
+        <!-- Binary Search State & Result -->
+        <div class="w-full grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div id="i-display" class="bs-pointer i-pointer text-center">i = 1</div>
+            <div id="j-display" class="bs-pointer j-pointer text-center">j = Max(piles)</div>
+            <div id="k-display" class="bs-pointer k-pointer text-center">k = ?</div>
+            <div id="h-display" class="bs-pointer bg-gray-100 border-gray-300 text-gray-700 text-center">H = ?</div>
+        </div>
+
+        <!-- Status Bar & Decision -->
+        <div class="w-full bg-gray-700 p-3 rounded-xl shadow-md mb-6 transition-all duration-300">
+            <span id="status-text" class="text-white text-sm font-mono block text-center">Ready to start the Binary Search.</span>
+        </div>
+
+        <div class="w-full grid grid-cols-1 gap-6">
+            
+            <!-- Logs Panel -->
+            <div>
+                <h3 class="text-xl font-semibold text-gray-700 mb-4">Time Calculation & Search History</h3>
+                <div class="panel grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div id="time-calc-log">
+                        <h4 class="font-bold text-gray-600 border-b pb-1 mb-2">Current Time Check (k = <span id="log-k-speed">?</span>)</h4>
+                        <!-- Rows dynamically generated here, consistent number enforced by placeholders -->
+                        <div class="log-entry"><span>Total Time ≤ H?</span> <span id="time-decision" class="text-gray-500">?</span></div>
+                    </div>
+
+                    <div id="k-history-log">
+                        <h4 class="font-bold text-gray-600 border-b pb-1 mb-2">Search Bounds & Candidates (k)</h4>
+                        <div id="k-history-list" class="text-sm text-gray-700 overflow-y-auto max-h-60">
+                            <!-- Table inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Code Snippet -->
+        <div class="w-full mt-6 bg-gray-800 p-4 rounded-xl shadow-xl">
+            <h3 class="text-lg font-semibold text-white mb-2">Algorithm Code (Java)</h3>
+            <div id="code-display" class="text-gray-200 text-sm overflow-x-auto font-mono"></div>
+        </div>
+    </div>
+
+<script>
+    // --- Configuration ---
+    const ANIMATION_DURATION = 400; 
+    
+    // Structured representation of the Java code for proper indentation and highlighting
+    // highlightLine refers to the line number in the original Java logic (for reference in generateSnapshots)
+    const CODE_SNIPPET_DISPLAY = [
+        { text: 'class Solution {', highlightLine: -1, indent: 0 },
+        { text: '    public int minEatingSpeed(int[] piles, int h) {', highlightLine: -1, indent: 1 },
+        { text: '        int i = 1; // lower bound', highlightLine: 4, indent: 2 },
+        { text: '        int j = max(piles); // upper bound', highlightLine: 5, indent: 2 },
+        { text: '', highlightLine: -1, indent: 0 },
+        { text: '        while (i <= j) {', highlightLine: 7, indent: 2 },
+        { text: '            int k = i + (j - i) / 2; // candidate speed', highlightLine: 8, indent: 3 },
+        { text: '            int time = 0;', highlightLine: 9, indent: 3 },
+        { text: '            for (int pile : piles) {', highlightLine: 10, indent: 3 },
+        { text: '                time += Math.ceil((double) pile / k);', highlightLine: 11, indent: 4 },
+        { text: '            }', highlightLine: -1, indent: 3 },
+        { text: '', highlightLine: -1, indent: 0 },
+        { text: '            if (time > h) { // Too slow', highlightLine: 15, indent: 3 },
+        { text: '                i = k + 1;', highlightLine: 16, indent: 4 },
+        { text: '            }', highlightLine: -1, indent: 3 },
+        { text: '            else { // Fast enough', highlightLine: 18, indent: 3 },
+        { text: '                j = k - 1;', highlightLine: 19, indent: 4 },
+        { text: '            }', highlightLine: -1, indent: 3 },
+        { text: '        }', highlightLine: 7, indent: 2 },
+        { text: '', highlightLine: -1, indent: 0 },
+        { text: '        return i;', highlightLine: 23, indent: 2 },
+        { text: '    }', highlightLine: -1, indent: 1 },
+        { text: '}', highlightLine: -1, indent: 0 },
+    ];
+
+
+    // --- State Management ---
+    let snapshots = [];
+    let currentStepIndex = 0;
+    let autoPlayInterval = null;
+
+    // --- Test Cases ---
+    const testCases = {
+        '0': { piles: [30, 11, 23, 4, 20], H: 6 },
+        '1': { piles: [3, 6, 7, 11], H: 8 }
+    };
+
+    // --- Simulation Logic ---
+
+    /**
+     * Calculates the time needed to eat all piles at a given speed k.
+     */
+    function calculateTime(piles, k) {
+        let totalTime = 0;
+        let breakdown = [];
+        for (let pile of piles) {
+            const time = Math.ceil(pile / k);
+            totalTime += time;
+            // Use standard characters for readability
+            breakdown.push({ 
+                pile, k, time, 
+                formula: `ceil(${pile} / ${k}) = ${time}` 
+            });
+        }
+        return { totalTime, breakdown };
+    }
+
+    /**
+     * Generates all steps (snapshots) of the binary search algorithm.
+     */
+    function generateSnapshots(piles, h) {
+        let history = [];
+        // kHistory will store objects {i, j, k, totalTime, feasible} for the table
+        let kHistory = []; 
+        
+        let i = 1;
+        let j = Math.max(...piles);
+
+        // --- Step 1: Initialization ---
+        history.push({
+            step: 1,
+            message: `Initialization: Set search space bounds. i = 1, j = ${j}. Target H = ${h}.`,
+            line: 4,
+            i: 1, j: j, k: null,
+            piles: piles, H: h,
+            timeResult: null,
+            decision: 'INIT',
+            kHistory: [...kHistory]
+        });
+
+        let step = 2;
+        while (i <= j) {
+            
+            // --- Step 2: Check boundary ---
+            history.push({
+                step: step++,
+                message: `Loop Check: i (${i}) ≤ j (${j}). Proceed with new iteration.`,
+                line: 7,
+                i, j, k: null,
+                piles, H: h,
+                timeResult: null,
+                decision: 'LOOP_CHECK',
+                kHistory: [...kHistory]
+            });
+            
+            // --- Step 3: Calculate k ---
+            let k = i + Math.floor((j - i) / 2);
+            let i_start = i; // Bounds used to calculate k
+            let j_start = j;
+
+            history.push({
+                step: step++,
+                message: `Calculate Candidate: k = floor((${i_start} + ${j_start}) / 2) = ${k}.`,
+                line: 8,
+                i, j, k,
+                piles, H: h,
+                timeResult: null,
+                decision: 'CALC_K',
+                kHistory: [...kHistory]
+            });
+
+            // --- Step 4: Time Calculation ---
+            const { totalTime, breakdown } = calculateTime(piles, k);
+
+            history.push({
+                step: step++,
+                message: `Time Check: Calculating total time required for all piles at speed k = ${k}.`,
+                line: 11,
+                i, j, k,
+                piles, H: h,
+                timeResult: { totalTime, breakdown },
+                decision: 'CALC_TIME',
+                kHistory: [...kHistory]
+            });
+            
+            let message, decision, line;
+            const isFeasible = totalTime <= h;
+            
+            // --- Step 5: Decision and Pointer Update ---
+            if (totalTime > h) {
+                // Too slow -> increase speed (move i)
+                i = k + 1;
+                decision = 'SLOW';
+                message = `Decision: Total Time (${totalTime}) > H (${h}). Koko is too slow. New lower bound i = k + 1 = ${i}.`;
+                line = 16;
+            } else {
+                // Fast enough -> try slower (move j), k is a potential answer
+                j = k - 1;
+                decision = 'FAST';
+                message = `Decision: Total Time (${totalTime}) ≤ H (${h}). Koko is fast enough. New upper bound j = k - 1 = ${j}.`;
+                line = 19;
+            }
+
+            // Log the result to the history table data
+            kHistory.push({ 
+                i: i_start, 
+                j: j_start, 
+                k, 
+                totalTime, 
+                feasible: isFeasible,
+                H: h 
+            });
+
+            history.push({
+                step: step++,
+                message,
+                line,
+                i, j, k,
+                piles, H: h,
+                timeResult: { totalTime, breakdown },
+                decision,
+                kHistory: [...kHistory] // Store updated history
+            });
+        }
+        
+        // --- Final Step: Return i ---
+        history.push({
+            step: step++,
+            message: `Loop termination: i (${i}) > j (${j}). The minimum feasible speed is returned.  ${i}.`,
+            line: 23,
+            i, j, k: history[history.length - 1].k, 
+            piles, H: h,
+            timeResult: history[history.length - 1].timeResult,
+            decision: 'RETURN',
+            kHistory: [...kHistory]
+        });
+
+        return history;
+    }
+
+    // --- UI Logic ---
+    function loadTestCase() {
+        stopAutoPlay();
+        const listIndex = document.getElementById("test-case-select").value;
+        const { piles, H } = testCases[listIndex];
+        
+        snapshots = generateSnapshots(piles, H);
+        currentStepIndex = 0;
+        
+        updateUI();
+    }
+
+    function updateUI() {
+        if (!snapshots.length) return;
+        const s = snapshots[currentStepIndex];
+        
+        // Update Binary Search Pointers
+        document.getElementById("i-display").innerHTML = `i = <span class="text-mono">${s.i}</span>`;
+        document.getElementById("j-display").innerHTML = `j = <span class="text-mono">${s.j}</span>`;
+        document.getElementById("h-display").innerHTML = `H = <span class="text-mono">${s.H}</span>`;
+        document.getElementById("k-display").innerHTML = `k = <span class="text-mono">${s.k === null ? '?' : s.k}</span>`;
+        
+        document.getElementById("log-k-speed").textContent = s.k === null ? '?' : s.k;
+
+        // Update Status and Decision
+        let statusColor = '#374151'; 
+        if (s.decision === 'RETURN') statusColor = '#10b981'; 
+        else if (s.decision === 'SLOW') statusColor = '#ef4444'; 
+        else if (s.decision === 'FAST') statusColor = '#1d4ed8'; 
+        else if (s.decision === 'CALC_TIME') statusColor = '#f59e0b'; 
+        else if (s.decision === 'CALC_K' || s.decision === 'LOOP_CHECK') statusColor = '#374151';
+
+        document.getElementById("status-text").innerHTML = s.message;
+        document.querySelector(".bg-gray-700").style.backgroundColor = statusColor;
+
+        // Render Code and Logs
+        renderCode(s.line);
+        renderTimeLog(s);
+        renderHistory(s.kHistory);
+        
+        // Update Buttons
+        document.getElementById("btn-prev").disabled = currentStepIndex === 0;
+        document.getElementById("btn-next").disabled = currentStepIndex === snapshots.length - 1;
+        
+        if (currentStepIndex === snapshots.length - 1) {
+            stopAutoPlay();
+            document.getElementById("btn-play").textContent = "Completed";
+            document.getElementById("btn-play").disabled = true;
+        } else {
+            document.getElementById("btn-play").textContent = autoPlayInterval ? "Pause" : "Auto Play";
+            document.getElementById("btn-play").disabled = false;
+        }
+    }
+
+    function renderCode(highlightLine) {
+        const codeDisplay = document.getElementById("code-display");
+        let htmlContent = '';
+        
+        CODE_SNIPPET_DISPLAY.forEach(lineData => {
+            const isHighlighted = lineData.highlightLine === highlightLine;
+            const indent = '    '.repeat(lineData.indent);
+            
+            let classList = 'transition-all duration-300 px-2 py-[1px] rounded-sm';
+            if (isHighlighted) {
+                classList += ' code-highlight';
+            } else {
+                classList += ' text-gray-200';
+            }
+            
+            htmlContent += `<div class="${classList} code-line">${indent}${lineData.text}</div>`;
+        });
+        
+        codeDisplay.innerHTML = htmlContent;
+    }
+
+    function renderTimeLog(snapshot) {
+        const logContainer = document.getElementById("time-calc-log");
+        const timeDecision = document.getElementById("time-decision");
+        
+        // Remove previous dynamically generated steps
+        logContainer.querySelectorAll('.time-step').forEach(el => el.remove());
+
+        const piles = snapshot.piles;
+        const timeResult = snapshot.timeResult;
+        const decisionActive = snapshot.decision === 'SLOW' || snapshot.decision === 'FAST' || snapshot.decision === 'CALC_TIME';
+
+        // Get the decision row parent for insertion reference
+        const decisionRowParent = timeDecision.parentNode;
+        
+        if (timeResult && decisionActive) {
+            // RENDER ACTUAL VALUES
+            
+            // 1. Pile Breakdown
+            timeResult.breakdown.forEach(d => {
+                const div = document.createElement('div');
+                div.className = 'log-entry time-step text-mono';
+                div.innerHTML = `<span>Pile ${d.pile}</span> <span>${d.formula}</span>`;
+                logContainer.insertBefore(div, decisionRowParent);
+            });
+            
+            // 2. Total Summary
+            const totalDiv = document.createElement('div');
+            totalDiv.className = 'log-entry time-step';
+            totalDiv.classList.add('font-bold', decisionActive ? 'log-highlight' : 'bg-gray-100');
+            totalDiv.innerHTML = `<span>Total Time</span> <span>${timeResult.totalTime}</span>`;
+            logContainer.insertBefore(totalDiv, decisionRowParent);
+
+            // 3. Decision Update
+            const isFeasible = timeResult.totalTime <= snapshot.H;
+            timeDecision.textContent = isFeasible ? 
+                `Yes (${timeResult.totalTime} ≤ ${snapshot.H})` : 
+                `No (${timeResult.totalTime} > ${snapshot.H})`;
+            
+            timeDecision.className = decisionActive ? 
+                (isFeasible ? 'text-green-700 font-bold' : 'text-red-700 font-bold') : 
+                'text-gray-500';
+
+        } else {
+            // RENDER PLACEHOLDERS to maintain height consistency
+            piles.forEach(pile => {
+                const div = document.createElement('div');
+                div.className = 'log-entry time-step text-mono text-gray-400';
+                div.innerHTML = `<span>Pile ${pile}</span> <span>-</span>`;
+                logContainer.insertBefore(div, decisionRowParent);
+            });
+            
+            const totalDiv = document.createElement('div');
+            totalDiv.className = 'log-entry time-step font-bold bg-gray-100 text-gray-400';
+            totalDiv.innerHTML = `<span>Total Time</span> <span>-</span>`;
+            logContainer.insertBefore(totalDiv, decisionRowParent);
+
+            timeDecision.textContent = '...';
+            timeDecision.className = 'text-gray-500';
+        }
+    }
+
+    function renderHistory(history) {
+        const historyList = document.getElementById("k-history-list");
+        
+        if (history.length === 0) {
+            historyList.innerHTML = '<p class="p-2 text-center text-gray-500">No candidates checked yet.</p>';
+            return;
+        }
+
+        let tableHtml = `
+            <table id="k-history-table">
+                <thead>
+                    <tr>
+                        <th class="i-pointer border-0 rounded-tl-lg">i (start)</th>
+                        <th class="j-pointer border-0">j (start)</th>
+                        <th class="k-pointer border-0">k (tested)</th>
+                        <th>Time (H=${history[0].H})</th>
+                        <th>Feasible?</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        history.forEach(d => {
+            const feasibleClass = d.feasible ? 'feasible' : 'slow';
+            const feasibleText = d.feasible ? 'Yes (Fast Enough)' : 'No (Too Slow)';
+
+            tableHtml += `
+                <tr>
+                    <td class="text-mono">${d.i}</td>
+                    <td class="text-mono">${d.j}</td>
+                    <td class="history-k-td text-blue-700 text-mono">${d.k}</td>
+                    <td class="text-mono">${d.totalTime}</td>
+                    <td class="history-result-td ${feasibleClass}">${feasibleText}</td>
+                </tr>
+            `;
+        });
+
+        tableHtml += `</tbody></table>`;
+        historyList.innerHTML = tableHtml;
+    }
+
+    function nextStep() {
+        if (currentStepIndex < snapshots.length - 1) { 
+            currentStepIndex++; 
+            updateUI(); 
+        } 
+        else { 
+            stopAutoPlay(); 
+        }
+    }
+
+    function prevStep() {
+        if (currentStepIndex > 0) { 
+            currentStepIndex--; 
+            updateUI(); 
+        }
+    }
+
+    function toggleAutoPlay() {
+        if (autoPlayInterval) { 
+            stopAutoPlay(); 
+        } 
+        else {
+            if (currentStepIndex === snapshots.length - 1) { currentStepIndex = 0; }
+            document.getElementById("btn-play").textContent = "Pause";
+            autoPlayInterval = setInterval(nextStep, ANIMATION_DURATION + 2000);
+        }
+    }
+
+    function stopAutoPlay() {
+        clearInterval(autoPlayInterval);
+        autoPlayInterval = null;
+        if (currentStepIndex !== snapshots.length - 1) {
+            document.getElementById("btn-play").textContent = "Auto Play";
+        }
+    }
+
+    // --- Event Listeners ---
+    document.getElementById("test-case-select").addEventListener("change", loadTestCase);
+    document.getElementById("btn-next").addEventListener("click", () => { stopAutoPlay(); nextStep(); });
+    document.getElementById("btn-prev").addEventListener("click", () => { stopAutoPlay(); prevStep(); });
+    document.getElementById("btn-reset").addEventListener("click", () => { stopAutoPlay(); currentStepIndex = 0; updateUI(); });
+    document.getElementById("btn-play").addEventListener("click", toggleAutoPlay);
+
+    // Initial load
+    window.onload = loadTestCase;
+</script>
+</body>
+</html>
