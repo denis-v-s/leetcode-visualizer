@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LC 167: Two Sum II Visualization</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.fonts.gstatic.com/s/inter/v13/UcCO3FZYvrS3I14vlSgC.css');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light blue-gray background */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 1000px;
+        }
+        
+        /* Custom UI Styles */
+        .panel {
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .text-mono {
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        /* Array Cell Styles */
+        .array-cell {
+            position: relative;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.1rem;
+            border: 2px solid #ccc;
+            background-color: #fefefe;
+            margin: 0 1px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            color: #1f2937;
+        }
+        
+        /* Pointer Label Styles */
+        .pointer-tag {
+            padding: 2px 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+
+        /* Specific Pointer Colors */
+        .i-pointer { background-color: #059669; color: white; } /* Emerald (i) */
+        .j-pointer { background-color: #ef4444; color: white; } /* Red (j) */
+        
+        /* Cell Highlights */
+        .current-compare {
+            background-color: #fcd34d; /* Yellow */
+            border-color: #eab308;
+            transform: scale(1.05);
+            box-shadow: 0 0 10px rgba(234, 179, 8, 0.5);
+        }
+        
+        .final-success {
+             background-color: #34d399;
+             color: #065f46;
+             border: 2px solid #059669;
+             animation: pulse-green 1s infinite;
+        }
+        .final-failure {
+             background-color: #fca5a5;
+             color: #7f1d1d;
+             border: 2px solid #ef4444;
+             animation: pulse-red 1s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(52, 211, 153, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+        }
+         @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(252, 165, 165, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(252, 165, 165, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(252, 165, 165, 0); }
+        }
+
+        /* Custom alignment for pointer rows */
+        .pointer-row-cell {
+            width: 50px;
+            height: 25px;
+            margin: 0 1px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Code Styles */
+        .code-container {
+            background-color: #1f2937; /* Dark Gray */
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .code-line {
+            padding: 2px 8px;
+            white-space: pre;
+            font-size: 0.9rem;
+            transition: background-color 0.3s, color 0.3s, border-left 0.3s;
+            border-left: 3px solid transparent;
+        }
+        .code-highlight {
+            background-color: #374151;
+            color: #ffeb3b; /* Yellow */
+            border-left: 3px solid #ffeb3b;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container flex flex-col items-center">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">LC 167: Two Sum II (Sorted Array) Visualization</h1>
+        <h3 class="text-lg text-gray-600 mb-6">Two-Pointer Algorithm Simulation</h3>
+
+        <!-- Controls and Inputs -->
+        <div class="controls panel flex flex-wrap gap-4 items-center justify-center border border-gray-100 w-full mb-6">
+            <div class="flex items-center gap-2">
+                <label class="font-semibold text-gray-700">Test Case:</label>
+                <select id="test-case-select" class="p-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500 transition duration-150">
+                    <option value="0">[2, 7, 11, 15], Target = 9 (Success)</option>
+                    <option value="1">[5, 25, 75], Target = 100 (Success)</option>
+                    <option value="2">[1, 2, 3, 4, 4, 9, 56, 90], Target = 8 (Success)</option>
+                    <option value="3">[1, 2, 3, 4, 5], Target = 10 (No Solution)</option>
+                </select>
+            </div>
+            
+            <div class="hidden sm:block w-px h-8 bg-gray-200"></div>
+            
+            <div class="flex items-center gap-2">
+                <label class="font-semibold text-gray-700">Target:</label>
+                <span id="target-display" class="p-2 text-xl font-mono text-indigo-600 font-bold border-2 border-indigo-300 rounded-lg">9</span>
+            </div>
+
+            <div class="hidden sm:block w-px h-8 bg-gray-200"></div>
+
+            <div class="flex gap-2">
+                <button id="btn-prev" class="px-4 py-2 bg-emerald-500 text-white font-semibold rounded-lg shadow-md hover:bg-emerald-600 transition disabled:bg-gray-400">
+                    &larr; Prev
+                </button>
+                <button id="btn-play" class="px-4 py-2 bg-emerald-500 text-white font-semibold rounded-lg shadow-md hover:bg-emerald-600 transition disabled:bg-gray-400">
+                    Auto Play
+                </button>
+                <button id="btn-next" class="px-4 py-2 bg-emerald-500 text-white font-semibold rounded-lg shadow-md hover:bg-emerald-600 transition disabled:bg-gray-400">
+                    Next Step &rarr;
+                </button>
+                <button id="btn-reset" class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg shadow-md hover:bg-gray-600 transition">
+                    Reset
+                </button>
+            </div>
+        </div>
+
+        <!-- Array Visualization Panel -->
+        <div class="w-full mb-6 p-4 panel flex flex-col items-center">
+            
+            <div id="array-title" class="text-xl font-bold mb-4 text-gray-800 text-mono break-all">Array: [2, 7, 11, 15]</div>
+            
+            <div class="overflow-x-auto w-full flex justify-start sm:justify-center">
+                <div class="inline-block">
+                     <!-- Array Index Labels (0, 1, 2...) -->
+                    <div id="array-indices" class="flex justify-start text-xs font-mono text-gray-500 mb-1"></div>
+                    
+                    <!-- Array Values (Numbers) -->
+                    <div id="array-visualization" class="flex justify-start flex-wrap mb-4"></div>
+                    
+                    <!-- Pointer Labels Below Array -->
+                    <div class="w-full max-w-fit border-t pt-2 mt-2">
+                        <div id="i-visual" class="flex justify-start"></div>
+                        <div id="j-visual" class="flex justify-start"></div>
+                    </div>
+                </div>
+            </div>
+           
+        </div>
+
+        <!-- Status Bar & Decision -->
+        <div class="w-full bg-gray-700 p-3 rounded-xl shadow-md mb-6 transition-all duration-300 flex flex-col md:flex-row justify-between items-center">
+            <span id="current-sum" class="text-white text-lg font-mono block text-center md:text-left mb-2 md:mb-0">Current Sum: N/A</span>
+            <span id="status-text" class="text-white text-base font-mono block text-center md:text-right">Ready to start the search.</span>
+        </div>
+
+        <!-- Algorithm Code -->
+        <div class="w-full">
+            <div class="code-container">
+                <h3 class="text-lg font-semibold text-white mb-2">Algorithm Code (Java)</h3>
+                <div id="code-display" class="text-gray-200 text-sm overflow-x-auto font-mono"></div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- Configuration ---
+    const ANIMATION_DURATION = 500; 
+    
+    // Structured representation of the Java code
+    const CODE_SNIPPET_DISPLAY = [
+        { text: 'class Solution {', line: -1, indent: 0 },
+        { text: '    public int[] twoSum(int[] numbers, int target) {', line: -1, indent: 1 },
+        { text: '        int i = 0;', line: 2, indent: 2 },
+        { text: '        int j = numbers.length - 1;', line: 3, indent: 2 },
+        { text: '        ', line: -1, indent: 0 },
+        { text: '        while (i < j) {', line: 6, indent: 2 },
+        { text: '            int sum = numbers[i] + numbers[j];', line: 7, indent: 3 },
+        { text: '            ', line: -1, indent: 0 },
+        { text: '            if (sum == target) return new int[] { i+1, j+1 };', line: 10, indent: 3 },
+        { text: '            ', line: -1, indent: 0 },
+        { text: '            if (sum < target) {', line: 13, indent: 3 },
+        { text: '                i++;', line: 14, indent: 4 },
+        { text: '            }', line: 15, indent: 3 },
+        { text: '            // If sum > target, move j back to decrease the sum', line: 16, indent: 3 },
+        { text: '            else {', line: 17, indent: 3 },
+        { text: '                j--;', line: 18, indent: 4 },
+        { text: '            }', line: 19, indent: 3 },
+        { text: '        }', line: 20, indent: 2 },
+        { text: '        ', line: -1, indent: 0 },
+        { text: '        return new int[] { -1, -1 };', line: 23, indent: 2 },
+        { text: '    }', line: -1, indent: 1 },
+        { text: '}', line: -1, indent: 0 },
+    ];
+
+
+    // --- State Management ---
+    let snapshots = [];
+    let currentStepIndex = 0;
+    let autoPlayInterval = null;
+
+    // --- Test Cases (Sorted Arrays Mandatory) ---
+    const testCases = {
+        '0': { numbers: [2, 7, 11, 15], target: 9 }, // Success: 2+7=9
+        '1': { numbers: [5, 25, 75], target: 100 }, // Success: 25+75=100
+        '2': { numbers: [1, 2, 3, 4, 4, 9, 56, 90], target: 8 }, // Success: 4+4=8
+        '3': { numbers: [1, 2, 3, 4, 5], target: 10 }, // Failure: Pointers cross
+    };
+
+    // --- Simulation Logic ---
+
+    /**
+     * Generates all steps (snapshots) of the two-sum algorithm.
+     */
+    function generateSnapshots({ numbers, target }) {
+        let history = [];
+        let i = 0;
+        let j = numbers.length - 1;
+        let step = 1;
+
+        // --- Step 1: Initialization ---
+        history.push({
+            step: step++,
+            message: `Initialization: Target is ${target}. Set i = 0, j = ${j}.`,
+            sum: 'N/A',
+            line: 3, // Highlights initialization lines
+            i, j, numbers, target,
+            decision: 'INIT',
+        });
+        
+        // Handle trivial case (array length < 2)
+        if (numbers.length < 2) {
+             history.push({
+                step: step++,
+                message: `Array length is less than 2. Cannot find two numbers.`,
+                sum: 'N/A',
+                line: 23,
+                i, j, numbers, target,
+                decision: 'FAILURE',
+            });
+            return history;
+        }
+
+
+        while (i < j) {
+            
+            // --- Step 2: Check loop condition ---
+            history.push({
+                step: step++,
+                message: `Loop Check: i (${i}) < j (${j}). Proceed.`,
+                sum: 'N/A',
+                line: 6,
+                i, j, numbers, target,
+                decision: 'LOOP_CHECK',
+            });
+            
+            // --- Step 3: Calculate Sum ---
+            const sum = numbers[i] + numbers[j];
+
+            history.push({
+                step: step++,
+                message: `Calculate Sum: numbers[${i}] (${numbers[i]}) + numbers[${j}] (${numbers[j]}) = ${sum}.`,
+                sum: sum,
+                line: 7,
+                i, j, numbers, target,
+                decision: 'SUM_CALC',
+            });
+            
+            // --- Step 4: Comparison ---
+            if (sum === target) {
+                // Success
+                history.push({
+                    step: step++,
+                    message: `SUCCESS! Sum (${sum}) == Target (${target}). Returning indices ${i + 1} and ${j + 1}.`,
+                    sum: sum,
+                    line: 10,
+                    i, j, numbers, target,
+                    decision: 'SUCCESS',
+                });
+                return history;
+            }
+            
+            if (sum < target) {
+                // Advance i (Line 13)
+                history.push({
+                    step: step++,
+                    message: `Sum (${sum}) < Target (${target}). Need a larger sum. Incrementing i (${i} -> ${i+1}).`,
+                    sum: sum,
+                    line: 14,
+                    i: i + 1, j, numbers, target,
+                    decision: 'I_ADVANCE',
+                });
+                i++;
+            }
+            else { // sum > target
+                // Advance j (Line 17)
+                history.push({
+                    step: step++,
+                    message: `Sum (${sum}) > Target (${target}). Need a smaller sum. Decrementing j (${j} -> ${j-1}).`,
+                    sum: sum,
+                    line: 18,
+                    i, j: j - 1, numbers, target,
+                    decision: 'J_ADVANCE',
+                });
+                j--;
+            }
+        }
+        
+        // --- Final Step: Loop ends naturally (Failure) ---
+        history.push({
+            step: step++,
+            message: `Loop completed (i >= j). No solution found.`,
+            sum: 'N/A',
+            line: 23,
+            i, j, numbers, target,
+            decision: 'FAILURE',
+        });
+
+        return history;
+    }
+
+    // --- UI Logic ---
+
+    function loadTestCase() {
+        // 1. Stop autoplay, if running
+        stopAutoPlay(); 
+        
+        // 2. Load data
+        const listIndex = document.getElementById("test-case-select").value;
+        const { numbers, target } = testCases[listIndex];
+        
+        // 3. Generate steps
+        snapshots = generateSnapshots({ numbers, target });
+        currentStepIndex = 0;
+        
+        // 4. Update UI
+        updateUI();
+    }
+
+    function updateUI() {
+        // Guard clause for safe array access
+        if (!snapshots.length || currentStepIndex < 0 || currentStepIndex >= snapshots.length) {
+            return; 
+        }
+
+        const s = snapshots[currentStepIndex];
+        
+        // Safe check for undefined snapshot or missing decision property
+        if (!s || typeof s.decision !== 'string') return; 
+
+        const { i, j, numbers, target, decision, sum } = s;
+        
+        // Update Target Display
+        document.getElementById("target-display").textContent = target;
+
+        // Update Array Display Title
+        document.getElementById("array-title").textContent = `Array: [${numbers.join(', ')}]`;
+
+        // Update Sum Display
+        document.getElementById("current-sum").textContent = `Current Sum: ${sum}`;
+
+        // Update Status and Decision Log
+        let statusColor = '#374151'; 
+        if (decision === 'SUCCESS') statusColor = '#059669'; 
+        else if (decision === 'FAILURE') statusColor = '#ef4444'; 
+        else if (decision.includes('ADVANCE')) statusColor = '#3b82f6'; // Blue for advancing
+        else if (decision === 'SUM_CALC') statusColor = '#f97316'; // Orange for calculation
+
+        document.getElementById("status-text").innerHTML = s.message;
+        document.querySelector(".bg-gray-700").style.backgroundColor = statusColor;
+
+        // Render Code
+        renderCode(s.line);
+        
+        // Render Array
+        renderArray(numbers, i, j, decision);
+        
+        // Update Buttons
+        const isFinal = decision === 'SUCCESS' || decision === 'FAILURE';
+        document.getElementById("btn-prev").disabled = currentStepIndex === 0;
+        document.getElementById("btn-next").disabled = currentStepIndex === snapshots.length - 1 || isFinal;
+        
+        if (isFinal) {
+            stopAutoPlay();
+            document.getElementById("btn-play").textContent = decision === 'FAILURE' ? "Finished" : "Success!";
+            document.getElementById("btn-play").disabled = true;
+        } else {
+            document.getElementById("btn-play").textContent = autoPlayInterval ? "Pause" : "Auto Play";
+            document.getElementById("btn-play").disabled = false;
+        }
+    }
+
+    function renderCode(highlightLine) {
+        const codeDisplay = document.getElementById("code-display");
+        let htmlContent = '';
+        
+        CODE_SNIPPET_DISPLAY.forEach(lineData => {
+            const isHighlighted = lineData.line === highlightLine;
+            const indent = '    '.repeat(lineData.indent);
+            
+            let classList = 'code-line';
+            if (isHighlighted) {
+                classList += ' code-highlight';
+            } else {
+                classList += ' text-gray-200';
+            }
+            
+            htmlContent += `<div class="${classList}">${indent}${lineData.text}</div>`;
+        });
+        
+        codeDisplay.innerHTML = htmlContent;
+    }
+
+    function renderArray(numbers, i, j, decision) {
+        const arrVis = document.getElementById("array-visualization");
+        const arrIdx = document.getElementById("array-indices");
+        
+        // Pointer visual containers
+        const iVis = document.getElementById("i-visual");
+        const jVis = document.getElementById("j-visual");
+        
+        arrVis.innerHTML = '';
+        arrIdx.innerHTML = '';
+        iVis.innerHTML = '';
+        jVis.innerHTML = '';
+
+        numbers.forEach((val, index) => {
+            
+            // --- 1. Index Labels (Above) ---
+            arrIdx.innerHTML += `<div class="pointer-row-cell border-0 bg-transparent text-xs font-mono text-center justify-end h-5">${index}</div>`;
+
+            // --- 2. Value Cell ---
+            const cell = document.createElement('div');
+            let classes = ['array-cell'];
+            
+            // Highlight based on current state
+            if ((index === i || index === j) && (decision === 'SUM_CALC' || decision === 'COMPARE' || decision === 'SUCCESS')) {
+                classes.push('current-compare');
+            }
+            
+            if (decision === 'SUCCESS') {
+                 classes.push('final-success');
+            } else if (decision === 'FAILURE') {
+                 classes.push('final-failure');
+            }
+            
+            cell.className = classes.join(' ');
+            cell.textContent = val;
+            arrVis.appendChild(cell);
+
+            
+            // --- 3. Pointer Visual Rows (Below) ---
+            
+            // Placeholder cell template for alignment
+            const placeholderHTML = `<div class="pointer-row-cell"></div>`;
+            
+            // Pointer tag template
+            const pointerTag = (label, className) => `<div class="pointer-row-cell">
+                <span class="pointer-tag ${className}">${label}</span>
+            </div>`;
+
+            // Row I
+            iVis.innerHTML += index === i 
+                ? pointerTag('i', 'i-pointer')
+                : placeholderHTML;
+
+            // Row J
+            jVis.innerHTML += index === j 
+                ? pointerTag('j', 'j-pointer')
+                : placeholderHTML;
+        });
+    }
+
+    function nextStep() {
+        // Prevent incrementing past the last index
+        if (currentStepIndex >= snapshots.length - 1) { 
+            stopAutoPlay(); 
+            return;
+        } 
+        
+        currentStepIndex++; 
+        updateUI(); 
+
+        // After updating the UI, check if we reached a final state and stop autoplay
+        const s = snapshots[currentStepIndex];
+        if (s && typeof s.decision === 'string' && (s.decision === 'SUCCESS' || s.decision === 'FAILURE')) {
+            stopAutoPlay();
+        }
+    }
+
+    function prevStep() {
+        if (currentStepIndex > 0) { 
+            currentStepIndex--; 
+            updateUI(); 
+        }
+    }
+
+    function toggleAutoPlay() {
+        if (autoPlayInterval) { 
+            stopAutoPlay(); 
+        } 
+        else {
+            if (!snapshots.length) return; // Guard against empty snapshots
+            
+            const currentSnapshot = snapshots[currentStepIndex];
+            
+            // Safely check if current state is final
+            let isFinal = false;
+            if (currentSnapshot && typeof currentSnapshot.decision === 'string') {
+                isFinal = currentSnapshot.decision === 'SUCCESS' || currentSnapshot.decision === 'FAILURE';
+            }
+
+            if (currentStepIndex === snapshots.length - 1 || isFinal) { currentStepIndex = 0; }
+            document.getElementById("btn-play").textContent = "Pause";
+            autoPlayInterval = setInterval(nextStep, ANIMATION_DURATION + 1000);
+        }
+    }
+
+    function stopAutoPlay() {
+        clearInterval(autoPlayInterval);
+        autoPlayInterval = null;
+        
+        if (!snapshots.length) {
+            return;
+        }
+        
+        // Safely access current decision
+        const currentSnapshot = snapshots[currentStepIndex];
+        
+        // Check for snapshot existence and decision property
+        if (!currentSnapshot || typeof currentSnapshot.decision !== 'string') return; 
+
+        const isFinal = currentSnapshot.decision === 'SUCCESS' || currentSnapshot.decision === 'FAILURE';
+        
+        if (currentStepIndex !== snapshots.length - 1 && !isFinal) {
+            document.getElementById("btn-play").textContent = "Auto Play";
+        }
+    }
+
+    // --- Event Listeners ---
+    document.getElementById("test-case-select").addEventListener("change", loadTestCase);
+    document.getElementById("btn-next").addEventListener("click", () => { stopAutoPlay(); nextStep(); });
+    document.getElementById("btn-prev").addEventListener("click", () => { stopAutoPlay(); prevStep(); });
+    document.getElementById("btn-reset").addEventListener("click", () => { stopAutoPlay(); currentStepIndex = 0; updateUI(); });
+    document.getElementById("btn-play").addEventListener("click", toggleAutoPlay);
+
+    // Initial load
+    window.onload = loadTestCase;
+</script>
+</body>
+</html>
