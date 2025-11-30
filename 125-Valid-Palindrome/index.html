@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LC 125: Valid Palindrome Visualization</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.fonts.gstatic.com/s/inter/v13/UcCO3FZYvrS3I14vlSgC.css');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7fee7; /* Light green-yellow background */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 1000px;
+        }
+        
+        /* Custom UI Styles */
+        .panel {
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .text-mono {
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        /* Character Cell Styles */
+        .char-cell {
+            position: relative;
+            width: 40px; /* Smaller width for long strings */
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1rem;
+            border: 2px solid #ccc;
+            background-color: #fefefe;
+            margin: 0 1px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            color: #1f2937;
+        }
+        
+        /* Pointer Label Styles */
+        .pointer-tag {
+            padding: 2px 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+
+        /* Specific Pointer Colors */
+        .i-pointer { background-color: #059669; color: white; } /* Emerald (i) */
+        .j-pointer { background-color: #ef4444; color: white; } /* Red (j) */
+        
+
+        /* Cell Highlights */
+        .current-compare {
+            background-color: #fcd34d; /* Yellow */
+            border-color: #eab308;
+        }
+        .skipped-char {
+            background-color: #e5e7eb; /* Light Gray */
+            color: #9ca3af;
+        }
+        .final-true {
+             background-color: #34d399;
+             color: #065f46;
+             border: 2px solid #059669;
+             animation: pulse-green 1s infinite;
+        }
+        .final-false {
+             background-color: #fca5a5;
+             color: #7f1d1d;
+             border: 2px solid #ef4444;
+             animation: pulse-red 1s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(52, 211, 153, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+        }
+         @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(252, 165, 165, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(252, 165, 165, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(252, 165, 165, 0); }
+        }
+
+        /* Custom alignment for pointer rows */
+        .pointer-row-cell {
+            width: 40px;
+            height: 25px;
+            margin: 0 1px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Code Styles */
+        .code-container {
+            background-color: #1f2937; /* Dark Gray */
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .code-line {
+            padding: 2px 8px;
+            white-space: pre;
+            font-size: 0.9rem;
+            transition: background-color 0.3s, color 0.3s, border-left 0.3s;
+            border-left: 3px solid transparent;
+        }
+        .code-highlight {
+            background-color: #374151;
+            color: #ffeb3b; /* Yellow */
+            border-left: 3px solid #ffeb3b;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container flex flex-col items-center">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">LC 125: Valid Palindrome Visualization</h1>
+        <h3 class="text-lg text-gray-600 mb-6">Two-Pointer Algorithm Simulation (Java Logic)</h3>
+
+        <!-- Controls and Inputs -->
+        <div class="controls panel flex flex-wrap gap-4 items-center justify-center border border-gray-100 w-full mb-6">
+            <div class="flex items-center gap-2">
+                <label class="font-semibold text-gray-700">Test Case:</label>
+                <select id="test-case-select" class="p-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500 transition duration-150">
+                    <!-- CORRECTED TEST CASE: This is now a true palindrome -->
+                    <option value="0">"Madam, I'm Adam" (True)</option>
+                    <option value="1">"race a car" (False)</option>
+                    <option value="2">" " (True, empty string)</option>
+                    <option value="3">"0P" (False, non-alphanumeric mix)</option>
+                    <option value="4">"Marge, let's go." (False)</option>
+                </select>
+            </div>
+            
+            <div class="hidden sm:block w-px h-8 bg-gray-200"></div>
+
+            <div class="flex gap-2">
+                <button id="btn-prev" class="px-4 py-2 bg-emerald-500 text-white font-semibold rounded-lg shadow-md hover:bg-emerald-600 transition disabled:bg-gray-400">
+                    &larr; Prev
+                </button>
+                <button id="btn-play" class="px-4 py-2 bg-emerald-500 text-white font-semibold rounded-lg shadow-md hover:bg-emerald-600 transition disabled:bg-gray-400">
+                    Auto Play
+                </button>
+                <button id="btn-next" class="px-4 py-2 bg-emerald-500 text-white font-semibold rounded-lg shadow-md hover:bg-emerald-600 transition disabled:bg-gray-400">
+                    Next Step &rarr;
+                </button>
+                <button id="btn-reset" class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg shadow-md hover:bg-gray-600 transition">
+                    Reset
+                </button>
+            </div>
+        </div>
+
+        <!-- String Visualization Panel -->
+        <div class="w-full mb-6 p-4 panel flex flex-col items-center">
+            
+            <div id="input-string-display" class="text-xl font-bold mb-4 text-gray-800 text-mono break-all">String: ""</div>
+            
+            <div class="overflow-x-auto w-full flex justify-start sm:justify-center">
+                <div class="inline-block">
+                     <!-- Array Index Labels (0, 1, 2...) -->
+                    <div id="array-indices" class="flex justify-start text-xs font-mono text-gray-500 mb-1"></div>
+                    
+                    <!-- Array Values (Characters) -->
+                    <div id="array-visualization" class="flex justify-start flex-wrap mb-4"></div>
+                    
+                    <!-- Pointer Labels Below Array -->
+                    <div class="w-full max-w-fit border-t pt-2 mt-2">
+                        <div id="i-visual" class="flex justify-start"></div>
+                        <div id="j-visual" class="flex justify-start"></div>
+                    </div>
+                </div>
+            </div>
+           
+        </div>
+
+        <!-- Status Bar & Decision -->
+        <div class="w-full bg-gray-700 p-3 rounded-xl shadow-md mb-6 transition-all duration-300">
+            <span id="status-text" class="text-white text-base font-mono block text-center">Ready to start the search.</span>
+        </div>
+
+        <!-- Algorithm Code -->
+        <div class="w-full">
+            <div class="code-container">
+                <h3 class="text-lg font-semibold text-white mb-2">Algorithm Code (Java)</h3>
+                <div id="code-display" class="text-gray-200 text-sm overflow-x-auto font-mono"></div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- Configuration ---
+    const ANIMATION_DURATION = 500; 
+
+    // Helper functions for character checks (mimics Java's Character methods)
+    const isAlphanumeric = (char) => /[a-zA-Z0-9]/.test(char);
+    const normalizeChar = (char) => char.toLowerCase();
+    
+    // Structured representation of the Java code
+    const CODE_SNIPPET_DISPLAY = [
+        { text: 'class Solution {', line: -1, indent: 0 },
+        { text: '    public boolean isPalindrome(String s) {', line: -1, indent: 1 },
+        { text: '        int i = 0;', line: 2, indent: 2 },
+        { text: '        int j = s.length() - 1;', line: 3, indent: 2 },
+        { text: '', line: -1, indent: 0 },
+        { text: '        while (i < j) {', line: 6, indent: 2 },
+        { text: '            // Skip non-alphanumeric from the left', line: 7, indent: 3 },
+        { text: '            while (i < j && !Character.isLetterOrDigit(s.charAt(i))) {', line: 8, indent: 4 },
+        { text: '                i++;', line: 9, indent: 5 },
+        { text: '            }', line: 10, indent: 4 },
+        { text: '            // Skip non-alphanumeric from the right', line: 11, indent: 3 },
+        { text: '            while (i < j && !Character.isLetterOrDigit(s.charAt(j))) {', line: 12, indent: 4 },
+        { text: '                j--;', line: 13, indent: 5 },
+        { text: '            }', line: 14, indent: 4 },
+        { text: '            ', line: -1, indent: 0 },
+        { text: '            if (Character.toLowerCase(s.charAt(i)) != Character.toLowerCase(s.charAt(j))) {', line: 17, indent: 3 },
+        { text: '                return false;', line: 18, indent: 4 },
+        { text: '            }', line: 19, indent: 3 },
+        { text: '            ', line: -1, indent: 0 },
+        { text: '            i++;', line: 22, indent: 3 },
+        { text: '            j--;', line: 23, indent: 3 },
+        { text: '        }', line: 24, indent: 2 },
+        { text: '', line: -1, indent: 0 },
+        { text: '        return true;', line: 27, indent: 2 },
+        { text: '    }', line: -1, indent: 1 },
+        { text: '}', line: -1, indent: 0 },
+    ];
+
+
+    // --- State Management ---
+    let snapshots = [];
+    let currentStepIndex = 0;
+    let autoPlayInterval = null;
+
+    // --- Test Cases (Max 20 characters) ---
+    const testCases = {
+        // CORRECTED TEST CASE
+        '0': { s: "Madam, I'm Adam", result: true }, // 15 chars
+        '1': { s: "race a car", result: false }, // 10 chars
+        '2': { s: " ", result: true }, // 1 char
+        '3': { s: "0P", result: false }, // 2 chars
+        '4': { s: "Marge, let's go.", result: false } // 17 chars
+    };
+
+    // --- Simulation Logic ---
+
+    /**
+     * Generates all steps (snapshots) of the palindrome check algorithm.
+     */
+    function generateSnapshots(s) {
+        let history = [];
+        let i = 0;
+        let j = s.length - 1;
+        let chars = s.split(''); 
+        let step = 1;
+
+        // --- Step 1: Initialization ---
+        history.push({
+            step: step++,
+            message: `Initialization: Set search bounds. i = 0, j = ${j}.`,
+            line: 2,
+            i, j, chars,
+            decision: 'INIT',
+        });
+        
+        // Handle trivial case (empty or single char string)
+        if (s.length <= 1) {
+            history.push({
+                step: step++,
+                message: `String length is ${s.length}. It is a valid palindrome.`,
+                line: 27,
+                i, j, chars,
+                decision: 'TRUE_TRIVIAL',
+            });
+            return history;
+        }
+
+
+        while (i < j) {
+            let i_start = i;
+            let j_start = j;
+
+            // --- Step 2: Check loop condition ---
+            history.push({
+                step: step++,
+                message: `Loop Check: i (${i}) < j (${j}). Proceed.`,
+                line: 6,
+                i, j, chars,
+                decision: 'LOOP_CHECK',
+            });
+            
+            // --- Step 3: Skip non-alphanumeric from the left (Line 8)
+            let i_moved = false;
+            while (i < j && !isAlphanumeric(chars[i])) {
+                i++;
+                i_moved = true;
+                history.push({
+                    step: step++,
+                    message: `Left Skip: Skipping non-alphanumeric char '${chars[i_start]}' at index ${i_start}. New i = ${i}.`,
+                    line: 9,
+                    i, j, chars,
+                    i_move_reason: 'SKIP',
+                    i_compare_char: i_start
+                });
+                i_start = i;
+            }
+            if (i_moved && i >= j) {
+                 // Check if pointers crossed *during* the skip
+                 history.push({
+                    step: step++,
+                    message: `Pointers met or crossed (i=${i}, j=${j}) after left skip. Valid Palindrome.`,
+                    line: 27,
+                    i, j, chars,
+                    decision: 'TRUE_MET',
+                });
+                return history;
+            }
+            
+            // If i moved and we are still in bounds, show the current character as focus
+            if (i_moved && i < j) {
+                 history.push({
+                    step: step++,
+                    message: `Left Skip Done. i is now at the first alphanumeric char: '${chars[i]}'.`,
+                    line: 8, // Back to loop condition check (implicitly)
+                    i, j, chars,
+                    decision: 'I_READY',
+                });
+            }
+
+
+            // --- Step 4: Skip non-alphanumeric from the right (Line 12)
+            let j_moved = false;
+            while (i < j && !isAlphanumeric(chars[j])) {
+                j--;
+                j_moved = true;
+                history.push({
+                    step: step++,
+                    message: `Right Skip: Skipping non-alphanumeric char '${chars[j_start]}' at index ${j_start}. New j = ${j}.`,
+                    line: 13,
+                    i, j, chars,
+                    j_move_reason: 'SKIP',
+                    j_compare_char: j_start
+                });
+                j_start = j;
+            }
+            if (j_moved && i >= j) {
+                 // Check if pointers crossed *during* the skip
+                 history.push({
+                    step: step++,
+                    message: `Pointers met or crossed (i=${i}, j=${j}) after right skip. Valid Palindrome.`,
+                    line: 27,
+                    i, j, chars,
+                    decision: 'TRUE_MET',
+                });
+                return history;
+            }
+            
+            if (j_moved && i < j) {
+                 history.push({
+                    step: step++,
+                    message: `Right Skip Done. j is now at the first alphanumeric char: '${chars[j]}'.`,
+                    line: 12, // Back to loop condition check (implicitly)
+                    i, j, chars,
+                    decision: 'J_READY',
+                });
+            }
+
+
+            // --- Step 5: Comparison (Line 17)
+            let charI = normalizeChar(chars[i]);
+            let charJ = normalizeChar(chars[j]);
+            
+            history.push({
+                step: step++,
+                message: `Comparing: Char at i (${chars[i]}) vs Char at j (${chars[j]}). Normalized: '${charI}' vs '${charJ}'.`,
+                line: 17,
+                i, j, chars,
+                decision: 'COMPARE',
+            });
+            
+            if (charI !== charJ) {
+                // Failure
+                history.push({
+                    step: step++,
+                    message: `Mismatch found! '${charI}' != '${charJ}'. Returning false.`,
+                    line: 18,
+                    i, j, chars,
+                    decision: 'FALSE',
+                });
+                return history;
+            }
+            
+            // --- Step 6: Advance Pointers (Line 22, 23)
+            i++;
+            j--;
+            
+            history.push({
+                step: step++,
+                message: `Match! '${charI}' == '${charJ}'. Advancing pointers: i to ${i}, j to ${j}.`,
+                line: 22,
+                i, j, chars,
+                decision: 'ADVANCE',
+                i_move_reason: 'ADVANCE',
+                j_move_reason: 'ADVANCE',
+            });
+        }
+        
+        // --- Final Step: Loop ends naturally ---
+        history.push({
+            step: step++,
+            message: `Loop completed (i >= j). All comparisons matched. Valid Palindrome.`,
+            line: 27,
+            i, j, chars,
+            decision: 'TRUE_END',
+        });
+
+        return history;
+    }
+
+    // --- UI Logic ---
+    function loadTestCase() {
+        // 1. Stop autoplay, if running
+        stopAutoPlay(); 
+        
+        // 2. Load data
+        const listIndex = document.getElementById("test-case-select").value;
+        const { s, target } = testCases[listIndex];
+        
+        // 3. Generate steps
+        snapshots = generateSnapshots(s);
+        currentStepIndex = 0;
+        
+        // 4. Update UI
+        updateUI();
+    }
+
+    function updateUI() {
+        // Guard clause added to prevent error on initial load before snapshots exist or if index is invalid
+        if (!snapshots.length || currentStepIndex < 0 || currentStepIndex >= snapshots.length) {
+            return; 
+        }
+
+        const s = snapshots[currentStepIndex];
+        // Check for undefined snapshot or missing decision property
+        if (!s || typeof s.decision !== 'string') return; 
+
+        const { i, j, chars, decision } = s;
+        
+        // Update String Display
+        document.getElementById("input-string-display").textContent = `String: "${s.chars.join('')}"`;
+
+        // Update Status and Decision Log
+        let statusColor = '#374151'; 
+        if (decision.startsWith('TRUE')) statusColor = '#059669'; 
+        else if (decision === 'FALSE') statusColor = '#ef4444'; 
+        else if (decision.includes('SKIP')) statusColor = '#3b82f6'; // Blue for skipping
+        else if (decision === 'COMPARE') statusColor = '#f97316'; // Orange for comparison
+
+        document.getElementById("status-text").innerHTML = s.message;
+        document.querySelector(".bg-gray-700").style.backgroundColor = statusColor;
+
+        // Render Code
+        renderCode(s.line);
+        
+        // Render Array/String
+        renderString(chars, i, j, decision);
+        
+        // Update Buttons
+        const isFinal = decision.startsWith('TRUE') || decision === 'FALSE';
+        document.getElementById("btn-prev").disabled = currentStepIndex === 0;
+        document.getElementById("btn-next").disabled = currentStepIndex === snapshots.length - 1 || isFinal;
+        
+        if (isFinal) {
+            stopAutoPlay();
+            document.getElementById("btn-play").textContent = decision === 'FALSE' ? "Failed" : "Success!";
+            document.getElementById("btn-play").disabled = true;
+        } else {
+            document.getElementById("btn-play").textContent = autoPlayInterval ? "Pause" : "Auto Play";
+            document.getElementById("btn-play").disabled = false;
+        }
+    }
+
+    function renderCode(highlightLine) {
+        const codeDisplay = document.getElementById("code-display");
+        let htmlContent = '';
+        
+        CODE_SNIPPET_DISPLAY.forEach(lineData => {
+            const isHighlighted = lineData.line === highlightLine;
+            const indent = '    '.repeat(lineData.indent);
+            
+            let classList = 'code-line';
+            if (isHighlighted) {
+                classList += ' code-highlight';
+            } else {
+                classList += ' text-gray-200';
+            }
+            
+            htmlContent += `<div class="${classList}">${indent}${lineData.text}</div>`;
+        });
+        
+        codeDisplay.innerHTML = htmlContent;
+    }
+
+    function renderString(chars, i, j, decision) {
+        const arrVis = document.getElementById("array-visualization");
+        const arrIdx = document.getElementById("array-indices");
+        
+        // Pointer visual containers
+        const iVis = document.getElementById("i-visual");
+        const jVis = document.getElementById("j-visual");
+        
+        arrVis.innerHTML = '';
+        arrIdx.innerHTML = '';
+        iVis.innerHTML = '';
+        jVis.innerHTML = '';
+
+        chars.forEach((val, index) => {
+            
+            // --- 1. Index Labels (Above) ---
+            arrIdx.innerHTML += `<div class="pointer-row-cell border-0 bg-transparent text-xs font-mono text-center justify-end h-5">${index}</div>`;
+
+            // --- 2. Value Cell ---
+            const cell = document.createElement('div');
+            let classes = ['char-cell'];
+            
+            const isAlphanum = isAlphanumeric(val);
+
+            // Highlight based on current state
+            if (index === i && decision === 'COMPARE') {
+                classes.push('current-compare');
+            } else if (index === j && decision === 'COMPARE') {
+                classes.push('current-compare');
+            } else if (!isAlphanum) {
+                 // Dim non-alphanumeric characters 
+                 classes.push('skipped-char');
+            }
+
+            if (decision.startsWith('TRUE')) {
+                 classes.push('final-true');
+            } else if (decision === 'FALSE') {
+                 classes.push('final-false');
+            }
+            
+            cell.className = classes.join(' ');
+            cell.textContent = val === ' ' ? '·' : val; // Use · for space for visibility
+            arrVis.appendChild(cell);
+
+            
+            // --- 3. Pointer Visual Rows (Below) ---
+            
+            // Placeholder cell template for alignment
+            const placeholderHTML = `<div class="pointer-row-cell"></div>`;
+            
+            // Pointer tag template
+            const pointerTag = (label, className) => `<div class="pointer-row-cell">
+                <span class="pointer-tag ${className}">${label}</span>
+            </div>`;
+
+            // Row I
+            // Only show i if it's strictly less than or equal to j (as per while loop condition)
+            iVis.innerHTML += index === i && i <= j
+                ? pointerTag('i', 'i-pointer')
+                : placeholderHTML;
+
+            // Row J
+            // Only show j if it's strictly greater than or equal to i (as per while loop condition)
+            jVis.innerHTML += index === j && i <= j
+                ? pointerTag('j', 'j-pointer')
+                : placeholderHTML;
+        });
+    }
+
+    function nextStep() {
+        // Prevent incrementing past the last index
+        if (currentStepIndex >= snapshots.length - 1) { 
+            stopAutoPlay(); 
+            return;
+        } 
+        
+        currentStepIndex++; 
+        updateUI(); 
+
+        // After updating the UI, check if we reached a final state and stop autoplay
+        const s = snapshots[currentStepIndex];
+        if (s && typeof s.decision === 'string' && (s.decision.startsWith('TRUE') || s.decision === 'FALSE')) {
+            stopAutoPlay();
+        }
+    }
+
+    function prevStep() {
+        if (currentStepIndex > 0) { 
+            currentStepIndex--; 
+            updateUI(); 
+        }
+    }
+
+    function toggleAutoPlay() {
+        if (autoPlayInterval) { 
+            stopAutoPlay(); 
+        } 
+        else {
+            if (!snapshots.length) return; // Guard against empty snapshots
+            
+            const currentSnapshot = snapshots[currentStepIndex];
+            
+            // Safely check if current state is final
+            let isFinal = false;
+            if (currentSnapshot && typeof currentSnapshot.decision === 'string') {
+                isFinal = currentSnapshot.decision.startsWith('TRUE') || currentSnapshot.decision === 'FALSE';
+            }
+
+            if (currentStepIndex === snapshots.length - 1 || isFinal) { currentStepIndex = 0; }
+            document.getElementById("btn-play").textContent = "Pause";
+            autoPlayInterval = setInterval(nextStep, ANIMATION_DURATION + 1000);
+        }
+    }
+
+    function stopAutoPlay() {
+        clearInterval(autoPlayInterval);
+        autoPlayInterval = null;
+        
+        if (!snapshots.length) {
+            return;
+        }
+        
+        // Safely access current decision
+        const currentSnapshot = snapshots[currentStepIndex];
+        
+        // Check for snapshot existence and decision property
+        if (!currentSnapshot || typeof currentSnapshot.decision !== 'string') return; 
+
+        const isFinal = currentSnapshot.decision.startsWith('TRUE') || currentSnapshot.decision === 'FALSE';
+        
+        if (currentStepIndex !== snapshots.length - 1 && !isFinal) {
+            document.getElementById("btn-play").textContent = "Auto Play";
+        }
+    }
+
+    // --- Event Listeners ---
+    document.getElementById("test-case-select").addEventListener("change", loadTestCase);
+    document.getElementById("btn-next").addEventListener("click", () => { stopAutoPlay(); nextStep(); });
+    document.getElementById("btn-prev").addEventListener("click", () => { stopAutoPlay(); prevStep(); });
+    document.getElementById("btn-reset").addEventListener("click", () => { stopAutoPlay(); currentStepIndex = 0; updateUI(); });
+    document.getElementById("btn-play").addEventListener("click", toggleAutoPlay);
+
+    // Initial load
+    window.onload = loadTestCase;
+</script>
+</body>
+</html>
