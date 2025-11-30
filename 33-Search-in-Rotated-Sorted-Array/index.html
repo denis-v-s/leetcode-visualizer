@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LC 33: Search in Rotated Sorted Array</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.fonts.gstatic.com/s/inter/v13/UcCO3FZYvrS3I14vlSgC.css');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #eef2ff; /* Light indigo background */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 1000px;
+        }
+        
+        /* Custom UI Styles */
+        .panel {
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .text-mono {
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        /* Array Cell Styles */
+        .array-cell {
+            position: relative;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.2rem;
+            border: 2px solid #ccc;
+            background-color: #f7f7f7;
+            margin: 0 2px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            color: #374151;
+        }
+        
+        /* Pointer Label Styles */
+        .pointer-tag {
+            padding: 2px 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+
+        /* Specific Pointer Colors */
+        .i-pointer { background-color: #10b981; color: white; } /* Green (i) */
+        .j-pointer { background-color: #f97316; color: white; } /* Orange (j) */
+        .m-pointer { background-color: #3b82f6; color: white; } /* Blue (mid) */
+        
+        .pointer-summary-box {
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        /* Code Styles */
+        .code-container {
+            background-color: #1f2937; /* Dark Gray */
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .code-line {
+            padding: 2px 8px;
+            white-space: pre;
+            font-size: 0.9rem;
+            transition: background-color 0.3s, color 0.3s, border-left 0.3s;
+            border-left: 3px solid transparent;
+        }
+        .code-highlight {
+            background-color: #374151;
+            color: #ffeb3b; /* Yellow */
+            border-left: 3px solid #ffeb3b;
+        }
+        
+        .found-box {
+             background-color: #34d399;
+             color: #065f46;
+             border: 2px solid #059669;
+             animation: pulse-green 1s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(52, 211, 153, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+        }
+
+        /* Custom alignment for pointer rows */
+        .pointer-row-cell {
+            width: 50px;
+            height: 25px;
+            margin: 0 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container flex flex-col items-center">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">LC 33: Search in Rotated Sorted Array</h1>
+        <h3 class="text-lg text-gray-600 mb-6">Binary Search Visualization (Java Logic)</h3>
+
+        <!-- Controls and Inputs -->
+        <div class="controls panel flex flex-wrap gap-4 items-center justify-center border border-gray-100 w-full mb-6">
+            <div class="flex items-center gap-2">
+                <label class="font-semibold text-gray-700">Test Case:</label>
+                <select id="test-case-select" class="p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150">
+                    <option value="0">[4, 5, 6, 7, 0, 1, 2], target=0 (Found @ Index 4)</option>
+                    <option value="1">[4, 5, 6, 7, 0, 1, 2], target=6 (Found @ Index 2)</option>
+                    <option value="2">[6, 7, 0, 1, 2, 4, 5], target=3 (Not Found)</option>
+                    <option value="3">[11, 12, 13, 1, 2, 3, 4, 5], target=13 (Found @ Index 2)</option>
+                </select>
+            </div>
+            
+            <div class="hidden sm:block w-px h-8 bg-gray-200"></div>
+
+            <div class="flex gap-2">
+                <button id="btn-prev" class="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition disabled:bg-gray-400">
+                    &larr; Prev
+                </button>
+                <button id="btn-play" class="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition disabled:bg-gray-400">
+                    Auto Play
+                </button>
+                <button id="btn-next" class="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition disabled:bg-gray-400">
+                    Next Step &rarr;
+                </button>
+                <button id="btn-reset" class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg shadow-md hover:bg-gray-600 transition">
+                    Reset
+                </button>
+            </div>
+        </div>
+
+        <!-- Array Visualization Panel -->
+        <div class="w-full mb-6 p-4 panel flex flex-col items-center">
+            
+            <!-- Pointers Summary (Numerical) -->
+            <div id="pointer-summary" class="w-full grid grid-cols-3 gap-4 text-center mb-4">
+                <div id="i-val" class="pointer-summary-box i-pointer">i: ?</div>
+                <div id="m-val" class="pointer-summary-box m-pointer">mid: ?</div>
+                <div id="j-val" class="pointer-summary-box j-pointer">j: ?</div>
+            </div>
+
+            <div id="target-display" class="text-xl font-bold mb-4 text-red-600">Target: ?</div>
+            
+            <!-- Array Index Labels (0, 1, 2...) -->
+            <div id="array-indices" class="flex justify-center text-xs font-mono text-gray-500 mb-1"></div>
+            
+            <!-- Array Values (4, 5, 6...) -->
+            <div id="array-visualization" class="flex justify-center flex-wrap mb-4"></div>
+            
+            <!-- NEW: Pointer Labels Below Array -->
+            <div class="w-full max-w-fit border-t pt-2 mt-2">
+                <div id="i-visual" class="flex justify-center"></div>
+                <div id="mid-visual" class="flex justify-center"></div>
+                <div id="j-visual" class="flex justify-center"></div>
+            </div>
+        </div>
+
+        <!-- Status Bar & Decision -->
+        <div class="w-full bg-gray-700 p-3 rounded-xl shadow-md mb-6 transition-all duration-300">
+            <span id="status-text" class="text-white text-base font-mono block text-center">Ready to start the search.</span>
+        </div>
+
+        <!-- Algorithm Code -->
+        <div class="w-full">
+            <div class="code-container">
+                <h3 class="text-lg font-semibold text-white mb-2">Algorithm Code (Java)</h3>
+                <div id="code-display" class="text-gray-200 text-sm overflow-x-auto font-mono"></div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- Configuration ---
+    const ANIMATION_DURATION = 500; 
+    
+    // Structured representation of the Java code provided by the user
+    const CODE_SNIPPET_DISPLAY = [
+        { text: 'class Solution {', line: -1, indent: 0 },
+        { text: '    public int search(int[] nums, int target) {', line: -1, indent: 1 },
+        { text: '        int i = 0;', line: 2, indent: 2 },
+        { text: '        int j = nums.length - 1;', line: 3, indent: 2 },
+        { text: '', line: -1, indent: 0 },
+        { text: '        while (i <= j) {', line: 6, indent: 2 },
+        { text: '            int mid = i + (j - i) / 2;', line: 7, indent: 3 },
+        { text: '', line: -1, indent: 0 },
+        { text: '            if (nums[mid] == target) return mid;', line: 9, indent: 3 },
+        { text: '', line: -1, indent: 0 },
+        { text: '            // Left half is sorted', line: 11, indent: 3 },
+        { text: '            if (nums[i] <= nums[mid]) {', line: 12, indent: 3 },
+        { text: '                if (target >= nums[i] && target < nums[mid]) {', line: 13, indent: 4 },
+        { text: '                    j = mid - 1; // search left', line: 14, indent: 5 },
+        { text: '                } else {', line: 15, indent: 4 },
+        { text: '                    i = mid + 1; // search right', line: 16, indent: 5 },
+        { text: '                }', line: 17, indent: 4 },
+        { text: '            }', line: 18, indent: 3 },
+        { text: '            // Right half is sorted', line: 19, indent: 3 },
+        { text: '            else {', line: 20, indent: 3 },
+        { text: '                if (target > nums[mid] && target <= nums[j]) {', line: 21, indent: 4 },
+        { text: '                    i = mid + 1; // search right', line: 22, indent: 5 },
+        { text: '                } else {', line: 23, indent: 4 },
+        { text: '                    j = mid - 1; // search left', line: 24, indent: 5 },
+        { text: '                }', line: 25, indent: 4 },
+        { text: '            }', line: 26, indent: 3 },
+        { text: '        }', line: 27, indent: 2 },
+        { text: '', line: -1, indent: 0 },
+        { text: '        return -1;', line: 29, indent: 2 },
+        { text: '    }', line: -1, indent: 1 },
+        { text: '}', line: -1, indent: 0 },
+    ];
+
+
+    // --- State Management ---
+    let snapshots = [];
+    let currentStepIndex = 0;
+    let autoPlayInterval = null;
+
+    // --- Test Cases ---
+    const testCases = {
+        '0': { nums: [4, 5, 6, 7, 0, 1, 2], target: 0, result: 4 },
+        '1': { nums: [4, 5, 6, 7, 0, 1, 2], target: 6, result: 2 },
+        '2': { nums: [6, 7, 0, 1, 2, 4, 5], target: 3, result: -1 },
+        '3': { nums: [11, 12, 13, 1, 2, 3, 4, 5], target: 13, result: 2 }
+    };
+
+    // --- Simulation Logic ---
+
+    /**
+     * Generates all steps (snapshots) of the binary search algorithm based on Java logic.
+     */
+    function generateSnapshots(nums, target) {
+        let history = [];
+        let i = 0;
+        let j = nums.length - 1;
+        let step = 1;
+
+        // --- Step 1: Initialization ---
+        history.push({
+            step: step++,
+            message: `Initialization: Set search bounds. i = 0, j = ${j}. Target = ${target}.`,
+            line: 2,
+            i, j, m: null,
+            nums, target,
+            decision: 'INIT',
+        });
+
+        while (i <= j) {
+            
+            // --- Step 2: Check loop condition ---
+            history.push({
+                step: step++,
+                message: `Loop Check: i (${i}) <= j (${j}). Proceed.`,
+                line: 6,
+                i, j, m: null,
+                nums, target,
+                decision: 'LOOP_CHECK',
+            });
+            
+            let mid = i + Math.floor((j - i) / 2);
+            let i_start = i;
+            let j_start = j;
+
+            // --- Step 3: Calculate mid ---
+            history.push({
+                step: step++,
+                message: `Calculate Midpoint (mid): mid = ${i_start} + floor((${j_start} - ${i_start}) / 2) = ${mid}. nums[${mid}] = ${nums[mid]}.`,
+                line: 7,
+                i: i_start, j: j_start, m: mid,
+                nums, target,
+                decision: 'CALC_M',
+            });
+            
+            // --- Step 4: Check if found ---
+            if (nums[mid] === target) {
+                history.push({
+                    step: step++,
+                    message: `Found Target! nums[${mid}] (${nums[mid]}) == target (${target}). Return index ${mid}.`,
+                    line: 9,
+                    i: i_start, j: j_start, m: mid,
+                    nums, target,
+                    decision: 'FOUND',
+                    found_index: mid
+                });
+                return history;
+            }
+
+            let message, line, decision;
+
+            // --- Step 5: Determine which side is sorted (Left or Right) ---
+            if (nums[i] <= nums[mid]) {
+                // Left half is sorted: [nums[i]...nums[mid]]
+                message = `Path: Left Half is Sorted (nums[i]=${nums[i]} <= nums[mid]=${nums[mid]}).`;
+                line = 12;
+                
+                history.push({
+                    step: step++,
+                    message: message,
+                    line: 12,
+                    i: i_start, j: j_start, m: mid,
+                    nums, target,
+                    decision: 'LEFT_SORTED',
+                });
+                
+                // Check if target is in the left sorted half (Line 13)
+                if (target >= nums[i] && target < nums[mid]) {
+                    // Target is in the sorted range -> search left
+                    j = mid - 1;
+                    message = `Sub-Decision: Target (${target}) is within the sorted range [nums[i]=${nums[i]}, nums[mid]-1=${nums[mid]-1}]. Search left. New j = mid - 1 = ${j}.`;
+                    line = 14;
+                    decision = 'SEARCH_LEFT_SORTED';
+                } else {
+                    // Target is NOT in the sorted range -> search right (unsorted part)
+                    i = mid + 1;
+                    message = `Sub-Decision: Target (${target}) is NOT in the sorted range. Search right (unsorted side). New i = mid + 1 = ${i}.`;
+                    line = 16;
+                    decision = 'SEARCH_RIGHT_UNSORTED';
+                }
+
+            } else {
+                // Right half is sorted: [nums[mid]...nums[j]]
+                message = `Path: Right Half is Sorted (nums[i]=${nums[i]} > nums[mid]=${nums[mid]}).`;
+                line = 20;
+                
+                history.push({
+                    step: step++,
+                    message: message,
+                    line: 20,
+                    i: i_start, j: j_start, m: mid,
+                    nums, target,
+                    decision: 'RIGHT_SORTED',
+                });
+                
+                // Check if target is in the right sorted half (Line 21)
+                if (target > nums[mid] && target <= nums[j]) {
+                    // Target is in the sorted range -> search right
+                    i = mid + 1;
+                    message = `Sub-Decision: Target (${target}) is within the sorted range [nums[mid]+1=${nums[mid]+1}, nums[j]=${nums[j]}]. Search right. New i = mid + 1 = ${i}.`;
+                    line = 22;
+                    decision = 'SEARCH_RIGHT_SORTED';
+                } else {
+                    // Target is NOT in the sorted range -> search left (unsorted part)
+                    j = mid - 1;
+                    message = `Sub-Decision: Target (${target}) is NOT in the sorted range. Search left (unsorted side). New j = mid - 1 = ${j}.`;
+                    line = 24;
+                    decision = 'SEARCH_LEFT_UNSORTED';
+                }
+            }
+            
+            // Record the pointer update step
+            history.push({
+                step: step++,
+                message: message,
+                line: line,
+                i, j, m: mid,
+                nums, target,
+                decision: decision,
+            });
+        }
+        
+        // --- Final Step: Not Found ---
+        history.push({
+            step: step++,
+            message: `Loop termination: i (${i}) > j (${j}). Target not found in the array. Return -1.`,
+            line: 29,
+            i, j, m: history[history.length - 1].m, 
+            nums, target,
+            decision: 'NOT_FOUND',
+        });
+
+        return history;
+    }
+
+    // --- UI Logic ---
+    function loadTestCase() {
+        // 1. Stop autoplay, if running
+        stopAutoPlay(); 
+        
+        // 2. Load data
+        const listIndex = document.getElementById("test-case-select").value;
+        const { nums, target } = testCases[listIndex];
+        
+        // 3. Generate steps
+        snapshots = generateSnapshots(nums, target);
+        currentStepIndex = 0;
+        
+        // 4. Update UI
+        updateUI();
+    }
+
+    function updateUI() {
+        // Guard clause added to prevent error on initial load before snapshots exist
+        if (!snapshots.length) return; 
+
+        const s = snapshots[currentStepIndex];
+        
+        // Update Target Display
+        document.getElementById("target-display").textContent = `Target: ${s.target}`;
+
+        // Update Pointers Display in the summary panel
+        document.getElementById("i-val").innerHTML = `i: <span class="text-mono">${s.i}</span>`;
+        document.getElementById("j-val").innerHTML = `j: <span class="text-mono">${s.j}</span>`;
+        document.getElementById("m-val").innerHTML = `mid: <span class="text-mono">${s.m === null ? '?' : s.m}</span>`;
+
+
+        // Update Status and Decision Log
+        let statusColor = '#374151'; 
+        if (s.decision === 'FOUND') statusColor = '#10b981'; 
+        else if (s.decision === 'NOT_FOUND') statusColor = '#ef4444'; 
+        else if (s.decision.includes('SEARCH')) statusColor = '#3b82f6'; 
+        else if (s.decision.includes('SORTED')) statusColor = '#f97316'; 
+
+        document.getElementById("status-text").innerHTML = s.message;
+        document.querySelector(".bg-gray-700").style.backgroundColor = statusColor;
+
+        // Render Code
+        renderCode(s.line);
+        
+        // Render Array
+        renderArray(s.nums, s.i, s.j, s.m, s.target, s.decision);
+        
+        // Update Buttons
+        document.getElementById("btn-prev").disabled = currentStepIndex === 0;
+        document.getElementById("btn-next").disabled = currentStepIndex === snapshots.length - 1 || s.decision === 'FOUND';
+        
+        if (currentStepIndex === snapshots.length - 1 || s.decision === 'FOUND') {
+            stopAutoPlay();
+            document.getElementById("btn-play").textContent = s.decision === 'FOUND' ? "Found!" : "Completed";
+            document.getElementById("btn-play").disabled = true;
+        } else {
+            document.getElementById("btn-play").textContent = autoPlayInterval ? "Pause" : "Auto Play";
+            document.getElementById("btn-play").disabled = false;
+        }
+    }
+
+    function renderCode(highlightLine) {
+        const codeDisplay = document.getElementById("code-display");
+        let htmlContent = '';
+        
+        CODE_SNIPPET_DISPLAY.forEach(lineData => {
+            const isHighlighted = lineData.line === highlightLine;
+            const indent = '    '.repeat(lineData.indent);
+            
+            let classList = 'code-line';
+            if (isHighlighted) {
+                classList += ' code-highlight';
+            } else {
+                classList += ' text-gray-200';
+            }
+            
+            htmlContent += `<div class="${classList}">${indent}${lineData.text}</div>`;
+        });
+        
+        codeDisplay.innerHTML = htmlContent;
+    }
+
+    function renderArray(nums, i, j, m, target, decision) {
+        const arrVis = document.getElementById("array-visualization");
+        const arrIdx = document.getElementById("array-indices");
+        
+        // Pointer visual containers
+        const iVis = document.getElementById("i-visual");
+        const midVis = document.getElementById("mid-visual");
+        const jVis = document.getElementById("j-visual");
+        
+        arrVis.innerHTML = '';
+        arrIdx.innerHTML = '';
+        iVis.innerHTML = '';
+        midVis.innerHTML = '';
+        jVis.innerHTML = '';
+
+        nums.forEach((val, index) => {
+            
+            // --- 1. Index Labels (Above) ---
+            arrIdx.innerHTML += `<div class="pointer-row-cell border-0 bg-transparent text-xs font-mono text-center justify-end h-5">${index}</div>`;
+
+            // --- 2. Value Cell ---
+            const cell = document.createElement('div');
+            let classes = ['array-cell'];
+
+            // Highlight Box for search range
+            if (index >= i && index <= j) {
+                classes.push('bg-indigo-100', 'border-indigo-300');
+            } else {
+                 classes.push('bg-gray-100', 'border-gray-300', 'text-gray-400');
+            }
+            
+            // Check if found
+            if (decision === 'FOUND' && index === m) {
+                classes = ['array-cell', 'found-box'];
+            }
+            
+            cell.className = classes.join(' ');
+            cell.textContent = val;
+            arrVis.appendChild(cell);
+
+            
+            // --- 3. Pointer Visual Rows (Below) ---
+            
+            // Placeholder cell template for alignment
+            const placeholderHTML = `<div class="pointer-row-cell"></div>`;
+            
+            // Pointer tag template
+            const pointerTag = (label, className) => `<div class="pointer-row-cell">
+                <span class="pointer-tag ${className}">${label}</span>
+            </div>`;
+
+            // Row I
+            iVis.innerHTML += index === i 
+                ? pointerTag('i', 'i-pointer')
+                : placeholderHTML;
+
+            // Row MID
+            midVis.innerHTML += index === m && m !== null
+                ? pointerTag('mid', 'm-pointer')
+                : placeholderHTML;
+
+            // Row J
+            jVis.innerHTML += index === j
+                ? pointerTag('j', 'j-pointer')
+                : placeholderHTML;
+        });
+    }
+
+    function nextStep() {
+        if (currentStepIndex < snapshots.length - 1) { 
+            currentStepIndex++; 
+            updateUI(); 
+        } 
+        else { 
+            stopAutoPlay(); 
+        }
+    }
+
+    function prevStep() {
+        if (currentStepIndex > 0) { 
+            currentStepIndex--; 
+            updateUI(); 
+        }
+    }
+
+    function toggleAutoPlay() {
+        if (autoPlayInterval) { 
+            stopAutoPlay(); 
+        } 
+        else {
+            if (currentStepIndex === snapshots.length - 1 || snapshots[currentStepIndex].decision === 'FOUND') { currentStepIndex = 0; }
+            document.getElementById("btn-play").textContent = "Pause";
+            autoPlayInterval = setInterval(nextStep, ANIMATION_DURATION + 1500);
+        }
+    }
+
+    function stopAutoPlay() {
+        // Guard clause added to prevent error on initial load before snapshots exist
+        if (!snapshots.length) {
+            clearInterval(autoPlayInterval);
+            autoPlayInterval = null;
+            return;
+        }
+
+        clearInterval(autoPlayInterval);
+        autoPlayInterval = null;
+        if (currentStepIndex !== snapshots.length - 1 && snapshots[currentStepIndex].decision !== 'FOUND') {
+            document.getElementById("btn-play").textContent = "Auto Play";
+        }
+    }
+
+    // --- Event Listeners ---
+    document.getElementById("test-case-select").addEventListener("change", loadTestCase);
+    document.getElementById("btn-next").addEventListener("click", () => { stopAutoPlay(); nextStep(); });
+    document.getElementById("btn-prev").addEventListener("click", () => { stopAutoPlay(); prevStep(); });
+    document.getElementById("btn-reset").addEventListener("click", () => { stopAutoPlay(); currentStepIndex = 0; updateUI(); });
+    document.getElementById("btn-play").addEventListener("click", toggleAutoPlay);
+
+    // Initial load
+    window.onload = loadTestCase;
+</script>
+</body>
+</html>
